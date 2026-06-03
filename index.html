@@ -344,72 +344,6 @@ const ENEMY_TYPES = {
 document.addEventListener('keydown', e => { keys[e.code] = true; if (e.code==='Space') e.preventDefault(); });
 document.addEventListener('keyup',   e => { keys[e.code] = false; });
 
-// ---- スタート画面: アイテム一覧生成 ----
-(function buildItemList() {
-  const el = document.getElementById('itemList');
-  if (!el) return;
-  for (const [key, def] of Object.entries(ITEM_DEFS)) {
-    const d = document.createElement('div');
-    d.className = 'ov-item';
-    const durationStr = def.duration > 0 ? `${def.duration/60|0}s` : '即時';
-    d.innerHTML = `
-      <div class="ov-item-icon" style="color:${def.color};border-color:${def.glow};background:${def.color}22;box-shadow:0 0 6px ${def.glow}66">${def.symbol}</div>
-      <div>
-        <div class="ov-item-name" style="color:${def.color}">${def.label}</div>
-        <div class="ov-item-desc">${def.desc}</div>
-      </div>`;
-    el.appendChild(d);
-  }
-})();
-
-// ---- スタート画面: 敵一覧生成 ----
-(function buildEnemyList() {
-  const el = document.getElementById('enemyList');
-  if (!el) return;
-  const enemies = [
-    {name:'BASIC',   color:'#ff5555', lv:1},
-    {name:'FAST',    color:'#ff55ff', lv:1},
-    {name:'TANK',    color:'#ff9944', lv:2},
-    {name:'ZIGZAG',  color:'#55ffff', lv:2},
-    {name:'SNIPER',  color:'#ffbb00', lv:3},
-    {name:'SPREAD',  color:'#bb55ff', lv:3},
-    {name:'BOMBER',  color:'#ff7700', lv:4},
-    {name:'LASER',   color:'#00ffbb', lv:4},
-    {name:'HOMING',  color:'#ffff55', lv:5},
-    {name:'BOSS',    color:'#ff00aa', lv:6},
-  ];
-  for (const e of enemies) {
-    const d = document.createElement('div');
-    d.className = 'ov-enemy';
-    d.innerHTML = `
-      <div class="ov-enemy-dot" style="background:${e.color}33;border-color:${e.color};box-shadow:0 0 5px ${e.color}88"></div>
-      <span style="color:${e.color}">${e.name}</span>
-      <span>Lv${e.lv}〜</span>`;
-    el.appendChild(d);
-  }
-})();
-
-// ---- 難易度説明 ----
-const DIFF_DESC = {
-  easy:   'ライフ5 / 敵が遅い / 連射速め',
-  normal: 'ライフ3 / 標準バランス',
-  hard:   'ライフ2 / 敵が速い / 連射遅い',
-};
-function updateDiffDesc() {
-  const el = document.getElementById('diffDesc');
-  if (el) el.textContent = DIFF_DESC[difficulty] || '';
-}
-
-document.querySelectorAll('.diff-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    difficulty = btn.dataset.diff;
-    updateDiffDesc();
-  });
-});
-document.getElementById('startBtn').addEventListener('click', startGame);
-
 // ---- アイテム定義 ----
 const ITEM_DEFS = {
   heal:      { color:'#ff4466', glow:'#ff2244', symbol:'♥',  label:'HEAL +1',       desc:'ライフを1回復',             duration:0   },
@@ -440,6 +374,74 @@ const DROP_TABLE = {
   homing: [{t:'shield',w:3},{t:'heal',w:2},{t:'rapid',w:1},{t:'barrier',w:1}],
   boss:   [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1},{t:'barrier',w:2}],
 };
+
+// ---- 難易度説明 ----
+const DIFF_DESC = {
+  easy:   'ライフ5 / 敵が遅い / 連射速め',
+  normal: 'ライフ3 / 標準バランス',
+  hard:   'ライフ2 / 敵が速い / 連射遅い',
+};
+function updateDiffDesc() {
+  const el = document.getElementById('diffDesc');
+  if (el) el.textContent = DIFF_DESC[difficulty] || '';
+}
+
+function buildItemListEl(el) {
+  if (!el) return;
+  el.innerHTML = '';
+  for (const [, def] of Object.entries(ITEM_DEFS)) {
+    const d = document.createElement('div');
+    d.className = 'ov-item';
+    d.innerHTML = `
+      <div class="ov-item-icon" style="color:${def.color};border-color:${def.glow};background:${def.color}22;box-shadow:0 0 6px ${def.glow}66">${def.symbol}</div>
+      <div>
+        <div class="ov-item-name" style="color:${def.color}">${def.label}</div>
+        <div class="ov-item-desc">${def.desc}</div>
+      </div>`;
+    el.appendChild(d);
+  }
+}
+
+function buildEnemyListEl(el) {
+  if (!el) return;
+  el.innerHTML = '';
+  const list = [
+    {name:'BASIC',  color:'#ff5555',lv:1},{name:'FAST',  color:'#ff55ff',lv:1},
+    {name:'TANK',   color:'#ff9944',lv:2},{name:'ZIGZAG',color:'#55ffff',lv:2},
+    {name:'SNIPER', color:'#ffbb00',lv:3},{name:'SPREAD',color:'#bb55ff',lv:3},
+    {name:'BOMBER', color:'#ff7700',lv:4},{name:'LASER', color:'#00ffbb',lv:4},
+    {name:'HOMING', color:'#ffff55',lv:5},{name:'BOSS',  color:'#ff00aa',lv:6},
+  ];
+  for (const e of list) {
+    const d = document.createElement('div');
+    d.className = 'ov-enemy';
+    d.innerHTML = `
+      <div class="ov-enemy-dot" style="background:${e.color}33;border-color:${e.color};box-shadow:0 0 5px ${e.color}88"></div>
+      <span style="color:${e.color}">${e.name}</span><span>Lv${e.lv}〜</span>`;
+    el.appendChild(d);
+  }
+}
+
+function attachOverlayListeners() {
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      difficulty = btn.dataset.diff;
+      updateDiffDesc();
+    });
+  });
+  const sb = document.getElementById('startBtn');
+  if (sb) sb.addEventListener('click', startGame);
+}
+
+// DOM ready 後に初期スタート画面を構築
+document.addEventListener('DOMContentLoaded', () => {
+  buildItemListEl(document.getElementById('itemList'));
+  buildEnemyListEl(document.getElementById('enemyList'));
+  attachOverlayListeners();
+  updateDiffDesc();
+});
 
 function applyItem(type) {
   const d = ITEM_DEFS[type];
@@ -1290,27 +1292,9 @@ function gameOver() {
     </div>
   `;
   overlay.style.display='flex';
-  // アイテム一覧再生成
-  const itemListEl = document.getElementById('itemList');
-  for (const [key, def] of Object.entries(ITEM_DEFS)) {
-    const d = document.createElement('div');
-    d.className = 'ov-item';
-    d.innerHTML = `
-      <div class="ov-item-icon" style="color:${def.color};border-color:${def.glow};background:${def.color}22;box-shadow:0 0 6px ${def.glow}66">${def.symbol}</div>
-      <div>
-        <div class="ov-item-name" style="color:${def.color}">${def.label}</div>
-        <div class="ov-item-desc">${def.desc}</div>
-      </div>`;
-    itemListEl.appendChild(d);
-  }
-  document.querySelectorAll('.diff-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('selected'));
-      btn.classList.add('selected'); difficulty=btn.dataset.diff;
-      updateDiffDesc();
-    });
-  });
-  document.getElementById('startBtn').addEventListener('click', startGame);
+  buildItemListEl(document.getElementById('itemList'));
+  attachOverlayListeners();
+  updateDiffDesc();
 }
 
 let loopId = null;
