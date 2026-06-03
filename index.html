@@ -80,6 +80,180 @@ const levelDisplay = document.getElementById('levelDisplay');
 const W = canvas.width, H = canvas.height;
 const TAU = Math.PI * 2;
 
+// ===================== AUDIO ENGINE =====================
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+let bgmNodes = null;
+
+function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
+
+// --- 効果音ヘルパー ---
+function playTone(freq, type, vol, dur, opts={}) {
+  resumeAC();
+  const t = AC.currentTime;
+  const osc = AC.createOscillator();
+  const gain = AC.createGain();
+  osc.connect(gain); gain.connect(AC.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (opts.freqEnd !== undefined) osc.frequency.exponentialRampToValueAtTime(opts.freqEnd, t + dur);
+  if (opts.freqEnd2 !== undefined) {
+    osc.frequency.exponentialRampToValueAtTime(opts.freqEnd, t + dur * 0.5);
+    osc.frequency.exponentialRampToValueAtTime(opts.freqEnd2, t + dur);
+  }
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.start(t); osc.stop(t + dur);
+}
+
+function playNoise(vol, dur, hipass=200) {
+  resumeAC();
+  const t = AC.currentTime;
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = AC.createBufferSource();
+  src.buffer = buf;
+  const filter = AC.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = hipass;
+  const gain = AC.createGain();
+  src.connect(filter); filter.connect(gain); gain.connect(AC.destination);
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.start(t); src.stop(t + dur);
+}
+
+// --- 効果音 ---
+function sfxShoot() {
+  playTone(880, 'square', 0.12, 0.08, { freqEnd: 440 });
+  playNoise(0.04, 0.05, 2000);
+}
+function sfxShootPower() {
+  playTone(1200, 'sawtooth', 0.15, 0.1, { freqEnd: 600 });
+  playTone(600, 'square', 0.08, 0.1, { freqEnd: 300 });
+  playNoise(0.05, 0.06, 1500);
+}
+function sfxHit() {
+  playNoise(0.18, 0.07, 800);
+  playTone(200, 'square', 0.08, 0.07, { freqEnd: 80 });
+}
+function sfxKill() {
+  playTone(440, 'sawtooth', 0.15, 0.05, { freqEnd: 110 });
+  playNoise(0.25, 0.15, 300);
+  playTone(220, 'square', 0.10, 0.12, { freqEnd: 55 });
+}
+function sfxBossKill() {
+  for (let i = 0; i < 4; i++) {
+    setTimeout(() => {
+      playTone(300 - i*40, 'sawtooth', 0.2, 0.18, { freqEnd: 60 });
+      playNoise(0.3, 0.2, 200);
+    }, i * 80);
+  }
+}
+function sfxItemGet() {
+  [523, 659, 784, 1047].forEach((f, i) =>
+    setTimeout(() => playTone(f, 'sine', 0.12, 0.1), i * 50)
+  );
+}
+function sfxShield() {
+  playTone(300, 'sine', 0.18, 0.3, { freqEnd: 150 });
+  playNoise(0.12, 0.2, 500);
+}
+function sfxBomb() {
+  playNoise(0.5, 0.4, 50);
+  playTone(80, 'sawtooth', 0.3, 0.5, { freqEnd: 30 });
+  playTone(160, 'square', 0.2, 0.3, { freqEnd: 40 });
+}
+function sfxPlayerHit() {
+  playNoise(0.3, 0.2, 100);
+  playTone(150, 'sawtooth', 0.2, 0.25, { freqEnd: 50 });
+}
+function sfxGameOver() {
+  [440,370,311,262].forEach((f,i) =>
+    setTimeout(() => playTone(f,'sawtooth',0.18,0.3,{freqEnd:f*0.7}), i*200)
+  );
+}
+
+// --- BGM (プロシージャル チップチューン) ---
+const SCALE = [0,2,4,7,9]; // ペンタトニック (半音)
+const ROOT = 55; // A2
+
+function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+function scaleNote(oct, deg) {
+  const semi = SCALE[((deg % SCALE.length) + SCALE.length) % SCALE.length];
+  return midiToFreq(ROOT + oct*12 + semi);
+}
+
+let bgmStep = 0, bgmTimer = null;
+const BPM = 140;
+const STEP_MS = (60000 / BPM) / 4; // 16分音符
+
+// メロディパターン (スケール度数)
+const MELODY = [0,2,4,2,4,7,4,2, 0,-1,0,2,4,2,0,-1];
+// ベースパターン
+const BASS   = [0,0,4,0,3,3,4,4, 0,0,4,0,3,3,4,0];
+
+function startBGM() {
+  if (bgmTimer) return;
+  resumeAC();
+  bgmStep = 0;
+  bgmTimer = setInterval(tickBGM, STEP_MS);
+}
+
+function stopBGM() {
+  if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+}
+
+function tickBGM() {
+  if (state !== 'playing') return;
+  const s = bgmStep % 16;
+  const t = AC.currentTime;
+  const vol = 0.06;
+
+  // メロディ (矩形波)
+  if (MELODY[s] >= 0) {
+    const freq = scaleNote(2, MELODY[s]);
+    const osc = AC.createOscillator();
+    const g = AC.createGain();
+    osc.connect(g); g.connect(AC.destination);
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + STEP_MS/1000 * 0.8);
+    osc.start(t); osc.stop(t + STEP_MS/1000 * 0.85);
+  }
+
+  // ベース (三角波)
+  {
+    const freq = scaleNote(0, BASS[s]);
+    const osc = AC.createOscillator();
+    const g = AC.createGain();
+    osc.connect(g); g.connect(AC.destination);
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const bvol = (s % 4 === 0) ? vol * 1.4 : vol * 0.7;
+    g.gain.setValueAtTime(bvol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + STEP_MS/1000 * 0.6);
+    osc.start(t); osc.stop(t + STEP_MS/1000 * 0.7);
+  }
+
+  // ドラム: キック (4つ打ち)
+  if (s % 4 === 0) {
+    playTone(120, 'sine', 0.25, 0.12, { freqEnd: 40 });
+  }
+  // ドラム: スネア
+  if (s === 4 || s === 12) {
+    playNoise(0.12, 0.08, 1000);
+  }
+  // ドラム: ハイハット
+  if (s % 2 === 0) {
+    playNoise(0.04, 0.04, 6000);
+  }
+
+  bgmStep++;
+}
+// ===================== END AUDIO =====================
+
 let state = 'title';
 let score, lives, level, frame;
 let player, bullets, enemies, enemyBullets, particles, stars, nebulas, trails, items;
@@ -166,7 +340,6 @@ function applyItem(type) {
       lives = Math.min(lives+2, 9);
       updateUI(); break;
     case 'bomb':
-      // 全敵に大ダメージ & 弾消去
       enemyBullets = [];
       for (const e of [...enemies]) {
         spawnParticles(e.x,e.y,e.color,10,{minSpd:2,maxSpd:5,maxSz:5});
@@ -175,6 +348,7 @@ function applyItem(type) {
       }
       enemies = enemies.filter(e=>e.hp>0);
       score += 50;
+      sfxBomb();
       shake(15);
       updateUI(); break;
   }
@@ -218,6 +392,7 @@ function startGame() {
 
   state = 'playing';
   updateUI();
+  startBGM();
   startLoop();
 }
 
@@ -387,6 +562,7 @@ function update() {
     }
     player.shootCooldown = effCooldown;
     spawnParticles(player.x, player.y-player.h/2, '#ff8', 4, {minSpd:1,maxSpd:3,decay:0.15,minSz:1,maxSz:3});
+    powerups.power ? sfxShootPower() : sfxShoot();
   }
 
   // player bullets
@@ -428,12 +604,14 @@ function update() {
         bullets.splice(j,1);
         e.hp--;
         spawnParticles(b.x, b.y, '#ff8', 5, {minSpd:1,maxSpd:4,decay:0.1,minSz:1,maxSz:3});
+        sfxHit();
         if (e.hp<=0) {
           spawnParticles(e.x, e.y, e.color, e.type==='boss'?40:15, {minSpd:1,maxSpd:5,maxSz:6});
           spawnParticles(e.x, e.y, '#fff', 6, {minSpd:2,maxSpd:6,decay:0.15,maxSz:3});
           spawnShockwave(e.x, e.y, e.color);
           onDeath(e);
           rollDrop(e.type, e.x, e.y);
+          e.type==='boss' ? sfxBossKill() : sfxKill();
           score+=e.score;
           if (e.type==='boss') bossSpawned=false;
           enemies.splice(i,1);
@@ -460,15 +638,16 @@ function update() {
     if (player.invincible===0 && Math.abs(b.x-player.x)<player.w/2*0.8 && Math.abs(b.y-player.y)<player.h/2*0.8) {
       enemyBullets.splice(i,1);
       if (powerups.shield) {
-        // シールドで吸収
         delete powerups.shield;
         spawnParticles(player.x,player.y,'#4488ff',12,{minSpd:2,maxSpd:5,maxSz:4});
         spawnShockwave(player.x,player.y,'#4488ff');
+        sfxShield();
         shake(6); player.invincible=40;
         notifications.push({text:'SHIELD BROKEN',color:'#4488ff',life:120,maxLife:120});
       } else {
         spawnParticles(player.x, player.y, '#0ff', 14, {minSpd:2,maxSpd:6,maxSz:5});
         spawnShockwave(player.x, player.y, '#0ff');
+        sfxPlayerHit();
         shake(12); lives--; player.invincible=120; updateUI();
         if (lives<=0){gameOver();return;}
       }
@@ -488,6 +667,7 @@ function update() {
       applyItem(it.type);
       spawnParticles(it.x,it.y,ITEM_DEFS[it.type].color,12,{minSpd:2,maxSpd:5,decay:0.08,minSz:2,maxSz:5});
       spawnShockwave(it.x,it.y,ITEM_DEFS[it.type].glow);
+      sfxItemGet();
       notifications.push({text:ITEM_DEFS[it.type].label, color:ITEM_DEFS[it.type].glow, life:120, maxLife:120});
       items.splice(i,1);
     }
@@ -923,6 +1103,8 @@ function updateUI() {
 
 function gameOver() {
   state='gameover';
+  stopBGM();
+  sfxGameOver();
   overlay.innerHTML=`
     <div class="subtitle">— GAME OVER —</div>
     <h1 style="font-size:44px">DEFEATED</h1>
