@@ -82,8 +82,10 @@ const TAU = Math.PI * 2;
 
 let state = 'title';
 let score, lives, level, frame;
-let player, bullets, enemies, enemyBullets, particles, stars, nebulas, trails;
+let player, bullets, enemies, enemyBullets, particles, stars, nebulas, trails, items;
 let shakeX = 0, shakeY = 0, shakeMag = 0;
+let powerups = {}; // アクティブなパワーアップと残り時間
+let notifications = []; // 画面上の取得通知
 let keys = {};
 let difficulty = 'easy';
 
@@ -118,14 +120,86 @@ document.querySelectorAll('.diff-btn').forEach(btn => {
 });
 document.getElementById('startBtn').addEventListener('click', startGame);
 
+// ---- アイテム定義 ----
+const ITEM_DEFS = {
+  heal:      { color:'#ff4466', glow:'#ff2244', symbol:'♥', label:'HEAL +1',        duration:0   },
+  lifeup:    { color:'#ff88aa', glow:'#ff4488', symbol:'♥+',label:'LIFE UP',         duration:0   },
+  rapid:     { color:'#ffff44', glow:'#ffdd00', symbol:'≫', label:'RAPID FIRE',      duration:600 },
+  spread:    { color:'#44ffff', glow:'#00ddff', symbol:'◈', label:'SPREAD SHOT',     duration:500 },
+  power:     { color:'#ff8800', glow:'#ff6600', symbol:'★', label:'POWER UP',        duration:480 },
+  shield:    { color:'#4488ff', glow:'#2266ff', symbol:'◉', label:'SHIELD',          duration:360 },
+  bomb:      { color:'#ff44ff', glow:'#dd00ff', symbol:'✦', label:'CLEAR BOMB',      duration:0   },
+  speedup:   { color:'#44ff88', glow:'#00ff66', symbol:'▲', label:'SPEED UP',        duration:420 },
+};
+
+// 敵ごとのドロップ率 (0-1、0=ドロップなし)
+const DROP_RATE = {
+  basic:0.10, fast:0.12, tank:0.25, zigzag:0.15,
+  sniper:0.20, spread:0.20, bomber:0.30, laser:0.25, homing:0.22, boss:1.0,
+};
+// ドロップテーブル (type: weight)
+const DROP_TABLE = {
+  basic:  [{t:'heal',w:3},{t:'rapid',w:2},{t:'speedup',w:1}],
+  fast:   [{t:'speedup',w:3},{t:'rapid',w:2},{t:'heal',w:1}],
+  tank:   [{t:'power',w:3},{t:'heal',w:2},{t:'shield',w:1},{t:'lifeup',w:1}],
+  zigzag: [{t:'rapid',w:3},{t:'spread',w:2},{t:'heal',w:1}],
+  sniper: [{t:'shield',w:3},{t:'heal',w:2},{t:'power',w:1}],
+  spread: [{t:'spread',w:3},{t:'rapid',w:2},{t:'heal',w:1}],
+  bomber: [{t:'bomb',w:3},{t:'power',w:2},{t:'lifeup',w:1},{t:'shield',w:1}],
+  laser:  [{t:'power',w:3},{t:'spread',w:2},{t:'shield',w:1}],
+  homing: [{t:'shield',w:3},{t:'heal',w:2},{t:'rapid',w:1}],
+  boss:   [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1}],
+};
+
+function applyItem(type) {
+  const d = ITEM_DEFS[type];
+  if (d.duration > 0) {
+    powerups[type] = d.duration;
+    return;
+  }
+  // 即時効果
+  switch(type) {
+    case 'heal':
+      lives = Math.min(lives+1, 9);
+      updateUI(); break;
+    case 'lifeup':
+      lives = Math.min(lives+2, 9);
+      updateUI(); break;
+    case 'bomb':
+      // 全敵に大ダメージ & 弾消去
+      enemyBullets = [];
+      for (const e of [...enemies]) {
+        spawnParticles(e.x,e.y,e.color,10,{minSpd:2,maxSpd:5,maxSz:5});
+        spawnShockwave(e.x,e.y,e.color);
+        e.hp-=8;
+      }
+      enemies = enemies.filter(e=>e.hp>0);
+      score += 50;
+      shake(15);
+      updateUI(); break;
+  }
+}
+
+function rollDrop(type, x, y) {
+  const rate = DROP_RATE[type] || 0;
+  if (Math.random() > rate) return;
+  const table = DROP_TABLE[type] || [{t:'heal',w:1}];
+  const total = table.reduce((s,e)=>s+e.w, 0);
+  let r = Math.random()*total;
+  let chosen = table[0].t;
+  for (const e of table) { r-=e.w; if(r<=0){chosen=e.t;break;} }
+  items.push({ x, y, type:chosen, vy:1.2, life:480, bobPhase:Math.random()*TAU, angle:0 });
+}
+
 // ---- 初期化 ----
 function startGame() {
   overlay.style.display = 'none';
   const d = DIFF[difficulty];
   score = 0; lives = d.lives; level = 1; frame = 0;
   bossSpawned = false;
+  powerups = {}; notifications = [];
   player = { x: W/2, y: H-70, w:36, h:36, speed:d.playerSpeed, shootCooldown:0, invincible:0 };
-  bullets=[]; enemies=[]; enemyBullets=[]; particles=[]; trails=[];
+  bullets=[]; enemies=[]; enemyBullets=[]; particles=[]; trails=[]; items=[];
 
   // 星 3層
   stars = [
@@ -271,11 +345,12 @@ function update() {
   for (const s of stars) { s.y+=s.speed; if(s.y>H+2) {s.y=-2; s.x=Math.random()*W;} }
   for (const n of nebulas) { n.y+=n.speed; if(n.y>H+n.ry*2) n.y=-n.ry*2; }
 
-  // player move
-  if (keys['ArrowLeft'])  player.x=Math.max(player.w/2, player.x-player.speed);
-  if (keys['ArrowRight']) player.x=Math.min(W-player.w/2, player.x+player.speed);
-  if (keys['ArrowUp'])    player.y=Math.max(player.h/2, player.y-player.speed);
-  if (keys['ArrowDown'])  player.y=Math.min(H-player.h/2, player.y+player.speed);
+  // player move (effSpeed は shoot ブロックより前に計算されるため後で定義、暫定で先に計算)
+  const _effSpeed = DIFF[difficulty].playerSpeed * (powerups.speedup ? 1.5 : 1);
+  if (keys['ArrowLeft'])  player.x=Math.max(player.w/2, player.x-_effSpeed);
+  if (keys['ArrowRight']) player.x=Math.min(W-player.w/2, player.x+_effSpeed);
+  if (keys['ArrowUp'])    player.y=Math.max(player.h/2, player.y-_effSpeed);
+  if (keys['ArrowDown'])  player.y=Math.min(H-player.h/2, player.y+_effSpeed);
   if (player.invincible>0) player.invincible--;
 
   // エンジントレイル
@@ -283,19 +358,43 @@ function update() {
     trails.push({x:player.x+(Math.random()-0.5)*8, y:player.y+player.h/2, life:1, decay:0.12, color:'#0cf', size:3+Math.random()*3});
   }
 
+  // パワーアップタイマー
+  for (const key of Object.keys(powerups)) {
+    if (powerups[key] > 0) powerups[key]--;
+    if (powerups[key] <= 0) delete powerups[key];
+  }
+  // 通知フェードアウト
+  for (let i=notifications.length-1;i>=0;i--) {
+    notifications[i].life--;
+    if (notifications[i].life<=0) notifications.splice(i,1);
+  }
+
+  // 実効パラメータ
+  const effSpeed = DIFF[difficulty].playerSpeed * (powerups.speedup ? 1.5 : 1);
+  const effCooldown = Math.round(DIFF[difficulty].shootCooldown * (powerups.rapid ? 0.35 : 1));
+
   // shoot
   if (player.shootCooldown>0) player.shootCooldown--;
   if (keys['Space'] && player.shootCooldown<=0) {
-    bullets.push({x:player.x, y:player.y-player.h/2, speed:13});
-    player.shootCooldown=DIFF[difficulty].shootCooldown;
-    // マズルフラッシュ
+    const bspd = powerups.power ? 16 : 13;
+    if (powerups.spread) {
+      // スプレッドショット: 3方向
+      for (const angle of [-0.2, 0, 0.2]) {
+        bullets.push({x:player.x, y:player.y-player.h/2, speed:bspd, angle});
+      }
+    } else {
+      bullets.push({x:player.x, y:player.y-player.h/2, speed:bspd, angle:0});
+    }
+    player.shootCooldown = effCooldown;
     spawnParticles(player.x, player.y-player.h/2, '#ff8', 4, {minSpd:1,maxSpd:3,decay:0.15,minSz:1,maxSz:3});
   }
 
   // player bullets
   for (let i=bullets.length-1;i>=0;i--) {
-    bullets[i].y-=bullets[i].speed;
-    if (bullets[i].y<0) bullets.splice(i,1);
+    const b=bullets[i];
+    b.y -= b.speed * Math.cos(b.angle||0);
+    b.x += b.speed * Math.sin(b.angle||0);
+    if (b.y<0 || b.x<0 || b.x>W) bullets.splice(i,1);
   }
 
   // spawn
@@ -334,6 +433,7 @@ function update() {
           spawnParticles(e.x, e.y, '#fff', 6, {minSpd:2,maxSpd:6,decay:0.15,maxSz:3});
           spawnShockwave(e.x, e.y, e.color);
           onDeath(e);
+          rollDrop(e.type, e.x, e.y);
           score+=e.score;
           if (e.type==='boss') bossSpawned=false;
           enemies.splice(i,1);
@@ -359,10 +459,37 @@ function update() {
     if (b.life<=0||b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){enemyBullets.splice(i,1);continue;}
     if (player.invincible===0 && Math.abs(b.x-player.x)<player.w/2*0.8 && Math.abs(b.y-player.y)<player.h/2*0.8) {
       enemyBullets.splice(i,1);
-      spawnParticles(player.x, player.y, '#0ff', 14, {minSpd:2,maxSpd:6,maxSz:5});
-      spawnShockwave(player.x, player.y, '#0ff');
-      shake(12); lives--; player.invincible=120; updateUI();
-      if (lives<=0){gameOver();return;}
+      if (powerups.shield) {
+        // シールドで吸収
+        delete powerups.shield;
+        spawnParticles(player.x,player.y,'#4488ff',12,{minSpd:2,maxSpd:5,maxSz:4});
+        spawnShockwave(player.x,player.y,'#4488ff');
+        shake(6); player.invincible=40;
+        notifications.push({text:'SHIELD BROKEN',color:'#4488ff',life:120,maxLife:120});
+      } else {
+        spawnParticles(player.x, player.y, '#0ff', 14, {minSpd:2,maxSpd:6,maxSz:5});
+        spawnShockwave(player.x, player.y, '#0ff');
+        shake(12); lives--; player.invincible=120; updateUI();
+        if (lives<=0){gameOver();return;}
+      }
+    }
+  }
+
+  // items
+  for (let i=items.length-1;i>=0;i--) {
+    const it=items[i];
+    it.y+=it.vy;
+    it.bobPhase+=0.06;
+    it.angle+=0.04;
+    it.life--;
+    if (it.y>H+20 || it.life<=0){items.splice(i,1);continue;}
+    // 取得判定
+    if (Math.abs(it.x-player.x)<(player.w/2+12) && Math.abs(it.y-player.y)<(player.h/2+12)) {
+      applyItem(it.type);
+      spawnParticles(it.x,it.y,ITEM_DEFS[it.type].color,12,{minSpd:2,maxSpd:5,decay:0.08,minSz:2,maxSz:5});
+      spawnShockwave(it.x,it.y,ITEM_DEFS[it.type].glow);
+      notifications.push({text:ITEM_DEFS[it.type].label, color:ITEM_DEFS[it.type].glow, life:120, maxLife:120});
+      items.splice(i,1);
     }
   }
 
@@ -567,7 +694,100 @@ function draw() {
     ctx.restore();
   }
 
+  // items
+  for (const it of items) {
+    const def=ITEM_DEFS[it.type];
+    const bob=Math.sin(it.bobPhase)*4;
+    const alpha=it.life<60 ? it.life/60 : 1;
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.translate(it.x, it.y+bob);
+    // 外枠リング
+    ctx.strokeStyle=def.glow;
+    ctx.shadowColor=def.glow;
+    ctx.shadowBlur=16;
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(0,0,14,0,TAU);
+    ctx.stroke();
+    // 塗り
+    const ig=ctx.createRadialGradient(0,0,0,0,0,13);
+    ig.addColorStop(0,def.color+'99');
+    ig.addColorStop(1,def.color+'22');
+    ctx.fillStyle=ig;
+    ctx.beginPath();
+    ctx.arc(0,0,13,0,TAU);
+    ctx.fill();
+    // シンボル
+    ctx.shadowBlur=8;
+    ctx.fillStyle='#fff';
+    ctx.font='bold 13px monospace';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(def.symbol,0,0);
+    ctx.restore();
+  }
+
+  // 取得通知
+  for (const n of notifications) {
+    const t=n.life/n.maxLife;
+    ctx.save();
+    ctx.globalAlpha=t<0.3?t/0.3:1;
+    ctx.fillStyle=n.color;
+    ctx.shadowColor=n.color;
+    ctx.shadowBlur=12;
+    ctx.font='bold 16px monospace';
+    ctx.textAlign='center';
+    ctx.fillText(n.text, W/2, H/2 - 60 + (1-t)*30);
+    ctx.restore();
+  }
+
+  // パワーアップ状態UI (下部)
+  drawPowerupUI();
+
+  // シールドオーラ
+  if (powerups.shield) {
+    const pulse=0.6+Math.sin(frame*0.1)*0.4;
+    ctx.save();
+    ctx.globalAlpha=pulse*0.5;
+    ctx.strokeStyle='#4488ff';
+    ctx.shadowColor='#4488ff';
+    ctx.shadowBlur=20;
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.w*0.9,0,TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.restore(); // shake
+}
+
+function drawPowerupUI() {
+  const active=Object.entries(powerups).filter(([,v])=>v>0);
+  if (!active.length) return;
+  let ix=10;
+  for (const [key,timer] of active) {
+    const def=ITEM_DEFS[key]; if(!def||def.duration===0) continue;
+    const ratio=timer/def.duration;
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(ix,H-32,44,22);
+    ctx.strokeStyle=def.glow;
+    ctx.shadowColor=def.glow;
+    ctx.shadowBlur=8;
+    ctx.lineWidth=1.5;
+    ctx.strokeRect(ix,H-32,44,22);
+    // 残り時間バー
+    ctx.fillStyle=def.color;
+    ctx.fillRect(ix,H-12,44*ratio,4);
+    ctx.fillStyle='#fff';
+    ctx.font='10px monospace';
+    ctx.textAlign='center';
+    ctx.fillText(def.symbol+' '+key.toUpperCase().slice(0,5), ix+22, H-20);
+    ctx.restore();
+    ix+=50;
+  }
 }
 
 function drawPlayer() {
