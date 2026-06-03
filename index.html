@@ -14,6 +14,10 @@
   #overlay .score { font-size: 28px; color: #ff0; }
   button { background: #0ff; color: #000; border: none; padding: 12px 32px; font-size: 20px; font-family: monospace; cursor: pointer; font-weight: bold; }
   button:hover { background: #fff; }
+  .diff-btns { display: flex; gap: 10px; }
+  .diff-btn { padding: 10px 20px; font-size: 16px; background: #222; color: #aaa; border: 2px solid #444; }
+  .diff-btn:hover { background: #333; color: #fff; }
+  .diff-btn.selected { border-color: #0ff; color: #0ff; background: #003; }
 </style>
 </head>
 <body>
@@ -27,6 +31,11 @@
   <div id="overlay">
     <h1>SHOOTER</h1>
     <p>← → ↑ ↓ で移動 / スペースで射撃</p>
+    <div class="diff-btns">
+      <button class="diff-btn selected" data-diff="easy">かんたん</button>
+      <button class="diff-btn" data-diff="normal">ふつう</button>
+      <button class="diff-btn" data-diff="hard">むずかしい</button>
+    </div>
     <button id="startBtn">スタート</button>
   </div>
 </div>
@@ -45,16 +54,32 @@ let state = 'title';
 let score, lives, level, frame;
 let player, bullets, enemies, enemyBullets, particles, stars;
 let keys = {};
+let difficulty = 'easy';
+
+const DIFF = {
+  easy:   { lives: 5, playerSpeed: 6, shootCooldown: 8,  enemySpeedMult: 0.7, shootRateMult: 0.5, spawnBase: 0.02, label: 'かんたん' },
+  normal: { lives: 3, playerSpeed: 5, shootCooldown: 10, enemySpeedMult: 1.0, shootRateMult: 1.0, spawnBase: 0.03, label: 'ふつう' },
+  hard:   { lives: 2, playerSpeed: 5, shootCooldown: 13, enemySpeedMult: 1.5, shootRateMult: 1.8, spawnBase: 0.045, label: 'むずかしい' },
+};
 
 document.addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    difficulty = btn.dataset.diff;
+  });
+});
 
 document.getElementById('startBtn').addEventListener('click', startGame);
 
 function startGame() {
   overlay.style.display = 'none';
-  score = 0; lives = 3; level = 1; frame = 0;
-  player = { x: W/2, y: H - 60, w: 36, h: 36, speed: 5, shootCooldown: 0 };
+  const d = DIFF[difficulty];
+  score = 0; lives = d.lives; level = 1; frame = 0;
+  player = { x: W/2, y: H - 60, w: 36, h: 36, speed: d.playerSpeed, shootCooldown: 0 };
   bullets = []; enemies = []; enemyBullets = []; particles = [];
   stars = Array.from({length: 80}, () => ({
     x: Math.random()*W, y: Math.random()*H,
@@ -74,10 +99,11 @@ function spawnEnemy() {
   if (r > weights[0] + weights[1]) type = types[2];
   else if (r > weights[0]) type = types[1];
 
+  const d = DIFF[difficulty];
   const configs = {
-    basic: { w:30, h:30, hp:1, speed:1, color:'#f44', score:10, shootRate:0.008 },
-    tank:  { w:40, h:40, hp:3, speed:0.5, color:'#f84', score:30, shootRate:0.005 },
-    fast:  { w:24, h:24, hp:1, speed:2.5, color:'#f4f', score:20, shootRate:0.012 },
+    basic: { w:30, h:30, hp:1, speed:1   * d.enemySpeedMult, color:'#f44', score:10, shootRate:0.008 * d.shootRateMult },
+    tank:  { w:40, h:40, hp:3, speed:0.5 * d.enemySpeedMult, color:'#f84', score:30, shootRate:0.005 * d.shootRateMult },
+    fast:  { w:24, h:24, hp:1, speed:2.5 * d.enemySpeedMult, color:'#f4f', score:20, shootRate:0.012 * d.shootRateMult },
   };
   const cfg = configs[type];
   enemies.push({
@@ -113,7 +139,7 @@ function update() {
   if (player.shootCooldown > 0) player.shootCooldown--;
   if (keys['Space'] && player.shootCooldown <= 0) {
     bullets.push({ x: player.x, y: player.y - player.h/2, speed: 12 });
-    player.shootCooldown = 10;
+    player.shootCooldown = DIFF[difficulty].shootCooldown;
   }
 
   // player bullets
@@ -123,7 +149,8 @@ function update() {
   }
 
   // spawn enemies
-  const spawnRate = Math.max(0.01, 0.03 - level*0.003);
+  const base = DIFF[difficulty].spawnBase;
+  const spawnRate = Math.max(0.01, base - level*0.003);
   if (Math.random() < spawnRate + level*0.002) spawnEnemy();
 
   // enemies
@@ -290,10 +317,22 @@ function gameOver() {
   overlay.innerHTML = `
     <h1>GAME OVER</h1>
     <p class="score">スコア: ${score}</p>
-    <p>レベル: ${level}</p>
+    <p>レベル: ${level} ／ ${DIFF[difficulty].label}</p>
+    <div class="diff-btns">
+      <button class="diff-btn ${difficulty==='easy'?'selected':''}" data-diff="easy">かんたん</button>
+      <button class="diff-btn ${difficulty==='normal'?'selected':''}" data-diff="normal">ふつう</button>
+      <button class="diff-btn ${difficulty==='hard'?'selected':''}" data-diff="hard">むずかしい</button>
+    </div>
     <button id="startBtn">もう一度</button>
   `;
   overlay.style.display = 'flex';
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      difficulty = btn.dataset.diff;
+    });
+  });
   document.getElementById('startBtn').addEventListener('click', startGame);
 }
 
