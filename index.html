@@ -14,38 +14,72 @@
     border-bottom: 1px solid rgba(0,255,255,0.2);
   }
   #ui span { text-shadow: 0 0 8px #0ff; }
+
+  /* ===== OVERLAY (スタート / ゲームオーバー) ===== */
   #overlay {
     position: absolute; top: 0; left: 0;
     display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 18px;
-    background: radial-gradient(ellipse at center, rgba(0,10,30,0.95) 60%, transparent 100%);
+    justify-content: flex-start;
+    overflow-y: auto; overflow-x: hidden;
+    background: radial-gradient(ellipse at center, rgba(0,8,24,0.97) 55%, rgba(0,4,12,0.93) 100%);
     width: 600px; height: 700px;
+    padding: 18px 0 12px;
+    gap: 0;
   }
-  #overlay h1 {
-    font-size: 56px; letter-spacing: 12px; color: #0ff;
-    text-shadow: 0 0 30px #0ff, 0 0 60px #0af, 0 0 100px #08f;
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
-  #overlay .subtitle { font-size: 13px; letter-spacing: 4px; color: #458; }
-  #overlay p { font-size: 14px; color: #89a; letter-spacing: 2px; }
-  #overlay .score { font-size: 32px; color: #ff0; text-shadow: 0 0 20px #ff0; letter-spacing: 4px; }
+  #overlay::-webkit-scrollbar { width: 4px; }
+  #overlay::-webkit-scrollbar-thumb { background: #0af4; border-radius: 2px; }
+
+  .ov-title { font-size: 48px; letter-spacing: 12px; color: #0ff;
+    text-shadow: 0 0 30px #0ff, 0 0 70px #08f;
+    animation: pulse 2s ease-in-out infinite; margin-bottom: 2px; }
+  .ov-sub { font-size: 11px; letter-spacing: 5px; color: #356; margin-bottom: 14px; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.75} }
+
+  /* 操作説明 */
+  .ov-section { width: 540px; border: 1px solid #1a3a5a; background: rgba(0,20,45,0.6);
+    border-radius: 2px; margin-bottom: 10px; }
+  .ov-section-title { font-size: 10px; letter-spacing: 4px; color: #0af;
+    padding: 5px 12px 3px; border-bottom: 1px solid #1a3a5a; }
+  .ov-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; padding: 8px 12px; }
+  .ov-ctrl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #7ab; }
+  .ov-key { background: rgba(0,180,255,0.1); border: 1px solid #0af6;
+    padding: 2px 6px; font-size: 11px; color: #0cf; border-radius: 2px; white-space: nowrap; }
+
+  /* アイテム一覧 */
+  .ov-items { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; padding: 6px 10px; }
+  .ov-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #89b; }
+  .ov-item-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; flex-shrink: 0; border: 1px solid; }
+  .ov-item-name { font-size: 11px; font-weight: bold; }
+  .ov-item-desc { font-size: 10px; color: #567; }
+
+  /* 敵一覧 */
+  .ov-enemies { display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; padding: 6px 10px; }
+  .ov-enemy { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; color: #678; text-align: center; }
+  .ov-enemy-dot { width: 18px; height: 18px; border-radius: 50%; border: 1px solid; }
+
+  /* 難易度・スタートボタン */
+  .ov-diff-row { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 6px 0 8px; }
   .diff-btns { display: flex; gap: 8px; }
   .diff-btn {
-    padding: 8px 18px; font-size: 13px; letter-spacing: 3px;
-    background: rgba(0,20,40,0.8); color: #567; border: 1px solid #234;
+    padding: 7px 18px; font-size: 12px; letter-spacing: 3px;
+    background: rgba(0,20,40,0.8); color: #456; border: 1px solid #234;
     font-family: inherit; cursor: pointer; transition: all 0.2s;
   }
   .diff-btn:hover { color: #adf; border-color: #4af; background: rgba(0,40,80,0.8); }
   .diff-btn.selected { color: #0ff; border-color: #0ff; background: rgba(0,60,100,0.8); text-shadow: 0 0 8px #0ff; }
+  .diff-desc { font-size: 10px; color: #456; letter-spacing: 1px; height: 14px; }
   #startBtn {
     background: transparent; color: #0ff; border: 1px solid #0ff;
-    padding: 12px 40px; font-size: 16px; letter-spacing: 6px;
+    padding: 10px 40px; font-size: 15px; letter-spacing: 6px;
     font-family: inherit; cursor: pointer;
-    box-shadow: 0 0 20px rgba(0,255,255,0.3), inset 0 0 20px rgba(0,255,255,0.05);
+    box-shadow: 0 0 16px rgba(0,255,255,0.3), inset 0 0 16px rgba(0,255,255,0.05);
     transition: all 0.2s;
   }
-  #startBtn:hover { background: rgba(0,255,255,0.1); box-shadow: 0 0 40px rgba(0,255,255,0.6), inset 0 0 30px rgba(0,255,255,0.1); }
+  #startBtn:hover { background: rgba(0,255,255,0.1); box-shadow: 0 0 36px rgba(0,255,255,0.6), inset 0 0 24px rgba(0,255,255,0.1); }
+
+  /* スコア表示 (ゲームオーバー) */
+  #overlay .ov-score { font-size: 30px; color: #ff0; text-shadow: 0 0 20px #ff0; letter-spacing: 4px; margin: 6px 0; }
 </style>
 </head>
 <body>
@@ -57,15 +91,40 @@
 <div style="position:relative">
   <canvas id="c" width="600" height="700"></canvas>
   <div id="overlay">
-    <div class="subtitle">— STELLAR FORCE —</div>
-    <h1>SHOOTER</h1>
-    <p>← → ↑ ↓  MOVE &nbsp;&nbsp; SPACE  FIRE</p>
-    <div class="diff-btns">
-      <button class="diff-btn selected" data-diff="easy">EASY</button>
-      <button class="diff-btn" data-diff="normal">NORMAL</button>
-      <button class="diff-btn" data-diff="hard">HARD</button>
+    <div class="ov-sub">— STELLAR FORCE —</div>
+    <div class="ov-title">SHOOTER</div>
+
+    <!-- 操作説明 -->
+    <div class="ov-section">
+      <div class="ov-section-title">▸ CONTROLS</div>
+      <div class="ov-controls">
+        <div class="ov-ctrl"><span class="ov-key">← → ↑ ↓</span>移動</div>
+        <div class="ov-ctrl"><span class="ov-key">SPACE</span>ショット</div>
+      </div>
     </div>
-    <button id="startBtn">START GAME</button>
+
+    <!-- アイテム説明 -->
+    <div class="ov-section">
+      <div class="ov-section-title">▸ ITEMS  (敵撃墜でランダムドロップ)</div>
+      <div class="ov-items" id="itemList"></div>
+    </div>
+
+    <!-- 敵一覧 -->
+    <div class="ov-section">
+      <div class="ov-section-title">▸ ENEMIES</div>
+      <div class="ov-enemies" id="enemyList"></div>
+    </div>
+
+    <!-- 難易度 & スタート -->
+    <div class="ov-diff-row">
+      <div class="diff-btns">
+        <button class="diff-btn selected" data-diff="easy">EASY</button>
+        <button class="diff-btn" data-diff="normal">NORMAL</button>
+        <button class="diff-btn" data-diff="hard">HARD</button>
+      </div>
+      <div class="diff-desc" id="diffDesc">ライフ5 / 敵が遅い / 連射速め</div>
+      <button id="startBtn">▶ START GAME</button>
+    </div>
   </div>
 </div>
 
@@ -285,25 +344,83 @@ const ENEMY_TYPES = {
 document.addEventListener('keydown', e => { keys[e.code] = true; if (e.code==='Space') e.preventDefault(); });
 document.addEventListener('keyup',   e => { keys[e.code] = false; });
 
+// ---- スタート画面: アイテム一覧生成 ----
+(function buildItemList() {
+  const el = document.getElementById('itemList');
+  if (!el) return;
+  for (const [key, def] of Object.entries(ITEM_DEFS)) {
+    const d = document.createElement('div');
+    d.className = 'ov-item';
+    const durationStr = def.duration > 0 ? `${def.duration/60|0}s` : '即時';
+    d.innerHTML = `
+      <div class="ov-item-icon" style="color:${def.color};border-color:${def.glow};background:${def.color}22;box-shadow:0 0 6px ${def.glow}66">${def.symbol}</div>
+      <div>
+        <div class="ov-item-name" style="color:${def.color}">${def.label}</div>
+        <div class="ov-item-desc">${def.desc}</div>
+      </div>`;
+    el.appendChild(d);
+  }
+})();
+
+// ---- スタート画面: 敵一覧生成 ----
+(function buildEnemyList() {
+  const el = document.getElementById('enemyList');
+  if (!el) return;
+  const enemies = [
+    {name:'BASIC',   color:'#ff5555', lv:1},
+    {name:'FAST',    color:'#ff55ff', lv:1},
+    {name:'TANK',    color:'#ff9944', lv:2},
+    {name:'ZIGZAG',  color:'#55ffff', lv:2},
+    {name:'SNIPER',  color:'#ffbb00', lv:3},
+    {name:'SPREAD',  color:'#bb55ff', lv:3},
+    {name:'BOMBER',  color:'#ff7700', lv:4},
+    {name:'LASER',   color:'#00ffbb', lv:4},
+    {name:'HOMING',  color:'#ffff55', lv:5},
+    {name:'BOSS',    color:'#ff00aa', lv:6},
+  ];
+  for (const e of enemies) {
+    const d = document.createElement('div');
+    d.className = 'ov-enemy';
+    d.innerHTML = `
+      <div class="ov-enemy-dot" style="background:${e.color}33;border-color:${e.color};box-shadow:0 0 5px ${e.color}88"></div>
+      <span style="color:${e.color}">${e.name}</span>
+      <span>Lv${e.lv}〜</span>`;
+    el.appendChild(d);
+  }
+})();
+
+// ---- 難易度説明 ----
+const DIFF_DESC = {
+  easy:   'ライフ5 / 敵が遅い / 連射速め',
+  normal: 'ライフ3 / 標準バランス',
+  hard:   'ライフ2 / 敵が速い / 連射遅い',
+};
+function updateDiffDesc() {
+  const el = document.getElementById('diffDesc');
+  if (el) el.textContent = DIFF_DESC[difficulty] || '';
+}
+
 document.querySelectorAll('.diff-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     difficulty = btn.dataset.diff;
+    updateDiffDesc();
   });
 });
 document.getElementById('startBtn').addEventListener('click', startGame);
 
 // ---- アイテム定義 ----
 const ITEM_DEFS = {
-  heal:      { color:'#ff4466', glow:'#ff2244', symbol:'♥', label:'HEAL +1',        duration:0   },
-  lifeup:    { color:'#ff88aa', glow:'#ff4488', symbol:'♥+',label:'LIFE UP',         duration:0   },
-  rapid:     { color:'#ffff44', glow:'#ffdd00', symbol:'≫', label:'RAPID FIRE',      duration:600 },
-  spread:    { color:'#44ffff', glow:'#00ddff', symbol:'◈', label:'SPREAD SHOT',     duration:500 },
-  power:     { color:'#ff8800', glow:'#ff6600', symbol:'★', label:'POWER UP',        duration:480 },
-  shield:    { color:'#4488ff', glow:'#2266ff', symbol:'◉', label:'SHIELD',          duration:360 },
-  bomb:      { color:'#ff44ff', glow:'#dd00ff', symbol:'✦', label:'CLEAR BOMB',      duration:0   },
-  speedup:   { color:'#44ff88', glow:'#00ff66', symbol:'▲', label:'SPEED UP',        duration:420 },
+  heal:      { color:'#ff4466', glow:'#ff2244', symbol:'♥',  label:'HEAL +1',       desc:'ライフを1回復',             duration:0   },
+  lifeup:    { color:'#ff88aa', glow:'#ff4488', symbol:'♥+', label:'LIFE UP',        desc:'ライフを2増加',             duration:0   },
+  rapid:     { color:'#ffff44', glow:'#ffdd00', symbol:'≫',  label:'RAPID FIRE',     desc:'連射速度3倍（10秒）',       duration:600 },
+  spread:    { color:'#44ffff', glow:'#00ddff', symbol:'◈',  label:'SPREAD SHOT',    desc:'3方向弾（8秒）',            duration:500 },
+  power:     { color:'#ff8800', glow:'#ff6600', symbol:'★',  label:'POWER UP',       desc:'弾速・威力強化（8秒）',     duration:480 },
+  shield:    { color:'#4488ff', glow:'#2266ff', symbol:'◉',  label:'SHIELD',         desc:'被弾1回無効（6秒）',        duration:360 },
+  barrier:   { color:'#00eeff', glow:'#00ccff', symbol:'⬡',  label:'BARRIER',        desc:'360°バリア展開（5秒）',     duration:300 },
+  bomb:      { color:'#ff44ff', glow:'#dd00ff', symbol:'✦',  label:'CLEAR BOMB',     desc:'全敵に大ダメージ＋弾消去', duration:0   },
+  speedup:   { color:'#44ff88', glow:'#00ff66', symbol:'▲',  label:'SPEED UP',       desc:'移動速度1.5倍（7秒）',      duration:420 },
 };
 
 // 敵ごとのドロップ率 (0-1、0=ドロップなし)
@@ -311,18 +428,17 @@ const DROP_RATE = {
   basic:0.10, fast:0.12, tank:0.25, zigzag:0.15,
   sniper:0.20, spread:0.20, bomber:0.30, laser:0.25, homing:0.22, boss:1.0,
 };
-// ドロップテーブル (type: weight)
 const DROP_TABLE = {
   basic:  [{t:'heal',w:3},{t:'rapid',w:2},{t:'speedup',w:1}],
   fast:   [{t:'speedup',w:3},{t:'rapid',w:2},{t:'heal',w:1}],
-  tank:   [{t:'power',w:3},{t:'heal',w:2},{t:'shield',w:1},{t:'lifeup',w:1}],
+  tank:   [{t:'power',w:3},{t:'heal',w:2},{t:'shield',w:1},{t:'lifeup',w:1},{t:'barrier',w:1}],
   zigzag: [{t:'rapid',w:3},{t:'spread',w:2},{t:'heal',w:1}],
-  sniper: [{t:'shield',w:3},{t:'heal',w:2},{t:'power',w:1}],
+  sniper: [{t:'shield',w:3},{t:'heal',w:2},{t:'power',w:1},{t:'barrier',w:1}],
   spread: [{t:'spread',w:3},{t:'rapid',w:2},{t:'heal',w:1}],
   bomber: [{t:'bomb',w:3},{t:'power',w:2},{t:'lifeup',w:1},{t:'shield',w:1}],
-  laser:  [{t:'power',w:3},{t:'spread',w:2},{t:'shield',w:1}],
-  homing: [{t:'shield',w:3},{t:'heal',w:2},{t:'rapid',w:1}],
-  boss:   [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1}],
+  laser:  [{t:'power',w:3},{t:'spread',w:2},{t:'shield',w:1},{t:'barrier',w:2}],
+  homing: [{t:'shield',w:3},{t:'heal',w:2},{t:'rapid',w:1},{t:'barrier',w:1}],
+  boss:   [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1},{t:'barrier',w:2}],
 };
 
 function applyItem(type) {
@@ -339,6 +455,9 @@ function applyItem(type) {
     case 'lifeup':
       lives = Math.min(lives+2, 9);
       updateUI(); break;
+    case 'barrier':
+      powerups.barrier = ITEM_DEFS.barrier.duration;
+      return;
     case 'bomb':
       enemyBullets = [];
       for (const e of [...enemies]) {
@@ -635,6 +754,19 @@ function update() {
     }
     b.x+=b.vx; b.y+=b.vy;
     if (b.life<=0||b.x<-10||b.x>W+10||b.y<-10||b.y>H+10){enemyBullets.splice(i,1);continue;}
+    // バリア: 一定距離以内の弾を弾き返す
+    if (powerups.barrier) {
+      const bdx=b.x-player.x, bdy=b.y-player.y;
+      const bdist=Math.sqrt(bdx*bdx+bdy*bdy);
+      if (bdist < 50) {
+        const nx=bdx/bdist, ny=bdy/bdist;
+        b.vx=nx*4; b.vy=ny*4;
+        b.homing=false;
+        b.color='#00eeff';
+        spawnParticles(b.x,b.y,'#00eeff',4,{minSpd:1,maxSpd:3,decay:0.15,minSz:1,maxSz:3});
+        continue;
+      }
+    }
     if (player.invincible===0 && Math.abs(b.x-player.x)<player.w/2*0.8 && Math.abs(b.y-player.y)<player.h/2*0.8) {
       enemyBullets.splice(i,1);
       if (powerups.shield) {
@@ -940,6 +1072,39 @@ function draw() {
     ctx.restore();
   }
 
+  // バリア: 六角形フィールド
+  if (powerups.barrier) {
+    const ratio=powerups.barrier/ITEM_DEFS.barrier.duration;
+    const pulse=0.5+Math.sin(frame*0.08)*0.5;
+    ctx.save();
+    ctx.globalAlpha=0.3+pulse*0.3;
+    ctx.strokeStyle='#00eeff';
+    ctx.shadowColor='#00eeff';
+    ctx.shadowBlur=24;
+    ctx.lineWidth=2.5;
+    // 六角形
+    ctx.beginPath();
+    for (let i=0;i<6;i++) {
+      const a=TAU/6*i + frame*0.02;
+      const r=50;
+      i===0 ? ctx.moveTo(player.x+Math.cos(a)*r, player.y+Math.sin(a)*r)
+            : ctx.lineTo(player.x+Math.cos(a)*r, player.y+Math.sin(a)*r);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    // 内側フィル
+    ctx.globalAlpha=0.06*pulse;
+    ctx.fillStyle='#00eeff';
+    ctx.fill();
+    // 残り時間リング
+    ctx.globalAlpha=0.7;
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,54,0,TAU*ratio);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.restore(); // shake
 }
 
@@ -1106,22 +1271,43 @@ function gameOver() {
   stopBGM();
   sfxGameOver();
   overlay.innerHTML=`
-    <div class="subtitle">— GAME OVER —</div>
-    <h1 style="font-size:44px">DEFEATED</h1>
-    <p class="score">SCORE  ${String(score).padStart(6,'0')}</p>
-    <p style="color:#567">LEVEL ${String(level).padStart(2,'0')} ／ ${DIFF[difficulty].label}</p>
-    <div class="diff-btns">
-      <button class="diff-btn ${difficulty==='easy'?'selected':''}" data-diff="easy">EASY</button>
-      <button class="diff-btn ${difficulty==='normal'?'selected':''}" data-diff="normal">NORMAL</button>
-      <button class="diff-btn ${difficulty==='hard'?'selected':''}" data-diff="hard">HARD</button>
+    <div class="ov-sub">— GAME OVER —</div>
+    <div class="ov-title" style="font-size:40px;margin-bottom:4px">DEFEATED</div>
+    <div class="ov-score">${String(score).padStart(6,'0')}</div>
+    <div style="font-size:12px;color:#456;letter-spacing:3px;margin-bottom:10px">LEVEL ${String(level).padStart(2,'0')} ／ ${DIFF[difficulty].label}</div>
+    <div class="ov-section" style="width:540px">
+      <div class="ov-section-title">▸ ITEMS</div>
+      <div class="ov-items" id="itemList"></div>
     </div>
-    <button id="startBtn">RETRY</button>
+    <div class="ov-diff-row">
+      <div class="diff-btns">
+        <button class="diff-btn ${difficulty==='easy'?'selected':''}" data-diff="easy">EASY</button>
+        <button class="diff-btn ${difficulty==='normal'?'selected':''}" data-diff="normal">NORMAL</button>
+        <button class="diff-btn ${difficulty==='hard'?'selected':''}" data-diff="hard">HARD</button>
+      </div>
+      <div class="diff-desc" id="diffDesc">${DIFF_DESC[difficulty]}</div>
+      <button id="startBtn">▶ RETRY</button>
+    </div>
   `;
   overlay.style.display='flex';
+  // アイテム一覧再生成
+  const itemListEl = document.getElementById('itemList');
+  for (const [key, def] of Object.entries(ITEM_DEFS)) {
+    const d = document.createElement('div');
+    d.className = 'ov-item';
+    d.innerHTML = `
+      <div class="ov-item-icon" style="color:${def.color};border-color:${def.glow};background:${def.color}22;box-shadow:0 0 6px ${def.glow}66">${def.symbol}</div>
+      <div>
+        <div class="ov-item-name" style="color:${def.color}">${def.label}</div>
+        <div class="ov-item-desc">${def.desc}</div>
+      </div>`;
+    itemListEl.appendChild(d);
+  }
   document.querySelectorAll('.diff-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('selected'));
       btn.classList.add('selected'); difficulty=btn.dataset.diff;
+      updateDiffDesc();
     });
   });
   document.getElementById('startBtn').addEventListener('click', startGame);
