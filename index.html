@@ -15,7 +15,8 @@
   }
   #ui span { text-shadow: 0 0 8px #0ff; }
   #overlay {
-    position: absolute; display: flex; flex-direction: column; align-items: center;
+    position: absolute; top: 0; left: 0;
+    display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 18px;
     background: radial-gradient(ellipse at center, rgba(0,10,30,0.95) 60%, transparent 100%);
     width: 600px; height: 700px;
@@ -143,7 +144,7 @@ function startGame() {
 
   state = 'playing';
   updateUI();
-  loop();
+  startLoop();
 }
 
 // ---- 弾生成ヘルパー ----
@@ -428,14 +429,11 @@ function draw() {
   for (const n of nebulas) {
     const g=ctx.createRadialGradient(n.x,n.y,0, n.x,n.y,n.rx);
     g.addColorStop(0, `hsla(${n.hue},80%,60%,${n.a})`);
-    g.addColorStop(1, 'transparent');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle=g;
-    ctx.save();
-    ctx.scale(1, n.ry/n.rx);
     ctx.beginPath();
-    ctx.arc(n.x, n.y*(n.rx/n.ry), n.rx, 0, TAU);
+    ctx.ellipse(n.x, n.y, n.rx, n.ry, 0, 0, TAU);
     ctx.fill();
-    ctx.restore();
   }
 
   // 星
@@ -727,10 +725,17 @@ function gameOver() {
   document.getElementById('startBtn').addEventListener('click', startGame);
 }
 
+let loopId = null;
 function loop() {
   if (state!=='playing') return;
   update(); draw();
-  requestAnimationFrame(loop);
+  loopId = requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  if (loopId) cancelAnimationFrame(loopId);
+  loopId = null;
+  loop();
 }
 </script>
 </body>
