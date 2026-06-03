@@ -1193,42 +1193,158 @@ function drawPowerupUI() {
 }
 
 function drawPlayer() {
-  const { x,y,w,h } = player;
+  const { x, y } = player;
   ctx.save();
-  ctx.translate(x,y);
-  ctx.shadowColor='#0ff';
-  ctx.shadowBlur=20;
+  ctx.translate(x, y);
 
-  // 機体本体グラデーション
-  const g=ctx.createLinearGradient(-w/2,h/2,w/2,-h/2);
-  g.addColorStop(0,'#036');
-  g.addColorStop(0.5,'#0cf');
-  g.addColorStop(1,'#fff');
-  ctx.fillStyle=g;
+  const S = 1.0; // スケール係数（調整用）
+
+  // ---- エンジン炎（機体の後ろ）----
+  const flicker = 0.7 + Math.random() * 0.3;
+  // 左エンジン炎
+  for (let i = 0; i < 2; i++) {
+    const fl = flicker * (i===0 ? 1 : 0.6);
+    const eg = ctx.createLinearGradient(-13*S, 18*S, -13*S, 18*S + 22*S*fl);
+    eg.addColorStop(0, `rgba(255,255,255,${fl})`);
+    eg.addColorStop(0.3, `rgba(0,200,255,${fl*0.8})`);
+    eg.addColorStop(1, 'rgba(0,80,255,0)');
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.ellipse(-13*S, 20*S, (3+Math.random()*2)*S, (10+Math.random()*8)*S*fl, 0, 0, TAU);
+    ctx.fill();
+  }
+  // 右エンジン炎
+  for (let i = 0; i < 2; i++) {
+    const fl = flicker * (i===0 ? 1 : 0.6);
+    const eg = ctx.createLinearGradient(13*S, 18*S, 13*S, 18*S + 22*S*fl);
+    eg.addColorStop(0, `rgba(255,255,255,${fl})`);
+    eg.addColorStop(0.3, `rgba(0,200,255,${fl*0.8})`);
+    eg.addColorStop(1, 'rgba(0,80,255,0)');
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.ellipse(13*S, 20*S, (3+Math.random()*2)*S, (10+Math.random()*8)*S*fl, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  // ---- 主翼（後退翼） ----
+  const wingGrad = ctx.createLinearGradient(0, 0, 0, 16*S);
+  wingGrad.addColorStop(0, '#1a6080');
+  wingGrad.addColorStop(0.5, '#0d3d55');
+  wingGrad.addColorStop(1, '#0a2a3a');
+  ctx.fillStyle = wingGrad;
+  ctx.shadowColor = '#0af';
+  ctx.shadowBlur = 12;
+  // 左翼
   ctx.beginPath();
-  ctx.moveTo(0,-h/2);
-  ctx.lineTo(w/2,h/2);
-  ctx.lineTo(w/4,h/4);
-  ctx.lineTo(-w/4,h/4);
-  ctx.lineTo(-w/2,h/2);
+  ctx.moveTo(-4*S, 0);
+  ctx.lineTo(-28*S, 14*S);
+  ctx.lineTo(-22*S, 18*S);
+  ctx.lineTo(-8*S,  10*S);
+  ctx.closePath();
+  ctx.fill();
+  // 右翼
+  ctx.beginPath();
+  ctx.moveTo(4*S, 0);
+  ctx.lineTo(28*S, 14*S);
+  ctx.lineTo(22*S, 18*S);
+  ctx.lineTo(8*S,  10*S);
   ctx.closePath();
   ctx.fill();
 
-  // コックピット
-  ctx.fillStyle='rgba(200,240,255,0.5)';
-  ctx.shadowBlur=5;
+  // 翼エッジライン
+  ctx.strokeStyle = 'rgba(0,220,255,0.5)';
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.ellipse(0,-h/6,w/8,h/5,0,0,TAU);
+  ctx.moveTo(-4*S,0); ctx.lineTo(-28*S,14*S); ctx.lineTo(-22*S,18*S);
+  ctx.moveTo( 4*S,0); ctx.lineTo( 28*S,14*S); ctx.lineTo( 22*S,18*S);
+  ctx.stroke();
+
+  // ---- 水平尾翼 ----
+  const tailGrad = ctx.createLinearGradient(0,14*S,0,20*S);
+  tailGrad.addColorStop(0,'#0d3d55'); tailGrad.addColorStop(1,'#0a2030');
+  ctx.fillStyle = tailGrad;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(-4*S, 14*S); ctx.lineTo(-15*S, 18*S); ctx.lineTo(-13*S, 21*S); ctx.lineTo(-5*S, 17*S);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo( 4*S, 14*S); ctx.lineTo( 15*S, 18*S); ctx.lineTo( 13*S, 21*S); ctx.lineTo( 5*S, 17*S);
+  ctx.closePath(); ctx.fill();
+
+  // ---- エンジンポッド (左右) ----
+  const podGrad = ctx.createLinearGradient(-15*S,0,-9*S,0);
+  podGrad.addColorStop(0,'#0a2535'); podGrad.addColorStop(0.5,'#1a6080'); podGrad.addColorStop(1,'#0d3d55');
+  ctx.fillStyle = podGrad;
+  ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.ellipse(-13*S, 12*S, 4*S, 8*S, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( 13*S, 12*S, 4*S, 8*S, 0, 0, TAU); ctx.fill();
+  // エンジン口リング
+  ctx.strokeStyle = 'rgba(0,180,255,0.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(-13*S, 18*S, 3.5*S, 2*S, 0, 0, TAU); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse( 13*S, 18*S, 3.5*S, 2*S, 0, 0, TAU); ctx.stroke();
+
+  // ---- 機体胴体 ----
+  const bodyGrad = ctx.createLinearGradient(-6*S, -22*S, 6*S, 18*S);
+  bodyGrad.addColorStop(0,   '#ffffff');
+  bodyGrad.addColorStop(0.2, '#88ddff');
+  bodyGrad.addColorStop(0.5, '#1a8ab0');
+  bodyGrad.addColorStop(0.8, '#0d5070');
+  bodyGrad.addColorStop(1,   '#0a2535');
+  ctx.fillStyle = bodyGrad;
+  ctx.shadowColor = '#0ff';
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.moveTo(0, -22*S);           // ノーズ先端
+  ctx.bezierCurveTo( 4*S,-16*S,  6*S,  -8*S,  6*S,  0);   // 右胴体前
+  ctx.lineTo(6*S, 14*S);
+  ctx.bezierCurveTo( 6*S, 18*S,  4*S,  20*S,  0,    21*S); // 後部
+  ctx.bezierCurveTo(-4*S, 20*S, -6*S,  18*S, -6*S,  14*S);
+  ctx.lineTo(-6*S, 0);
+  ctx.bezierCurveTo(-6*S, -8*S, -4*S, -16*S,  0,   -22*S); // 左胴体前
+  ctx.closePath();
   ctx.fill();
 
-  // 翼ライン
-  ctx.strokeStyle='rgba(0,255,255,0.6)';
-  ctx.lineWidth=1;
-  ctx.shadowBlur=8;
+  // 胴体エッジハイライト
+  ctx.strokeStyle = 'rgba(180,240,255,0.4)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(-w/4,h/4); ctx.lineTo(-w/2,h/2);
-  ctx.moveTo( w/4,h/4); ctx.lineTo( w/2,h/2);
+  ctx.moveTo(-1*S,-22*S); ctx.bezierCurveTo(-1*S,-14*S, -2*S,-4*S, -2*S, 14*S);
   ctx.stroke();
+
+  // ---- コックピットキャノピー ----
+  const cockpitGrad = ctx.createRadialGradient(-1*S,-10*S,0, 0,-8*S, 6*S);
+  cockpitGrad.addColorStop(0, 'rgba(200,240,255,0.95)');
+  cockpitGrad.addColorStop(0.4,'rgba(80,180,220,0.7)');
+  cockpitGrad.addColorStop(1, 'rgba(0,60,120,0.4)');
+  ctx.fillStyle = cockpitGrad;
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = '#aef';
+  ctx.beginPath();
+  ctx.ellipse(0, -10*S, 3.5*S, 6*S, 0, 0, TAU);
+  ctx.fill();
+  // キャノピー反射
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(-1*S, -12*S, 1.2*S, 2.5*S, -0.3, 0, TAU);
+  ctx.fill();
+
+  // ---- ミサイル（左右） ----
+  ctx.fillStyle = '#0d3040';
+  ctx.shadowBlur = 4;
+  ctx.shadowColor = '#08f';
+  ctx.beginPath(); ctx.ellipse(-20*S, 10*S, 1.8*S, 5*S, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( 20*S, 10*S, 1.8*S, 5*S, 0, 0, TAU); ctx.fill();
+  // ミサイル先端
+  ctx.fillStyle = '#5af';
+  ctx.beginPath(); ctx.ellipse(-20*S, 5.5*S, 1.5*S, 2*S, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( 20*S, 5.5*S, 1.5*S, 2*S, 0, 0, TAU); ctx.fill();
+
+  // ---- 機首ライト ----
+  ctx.fillStyle = `rgba(255,255,255,${0.6+Math.sin(frame*0.05)*0.4})`;
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(0, -21*S, 1.5*S, 0, TAU); ctx.fill();
 
   ctx.restore();
 }
