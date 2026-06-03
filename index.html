@@ -49,6 +49,7 @@ const livesDisplay = document.getElementById('livesDisplay');
 const levelDisplay = document.getElementById('levelDisplay');
 
 const W = canvas.width, H = canvas.height;
+const TAU = Math.PI * 2;
 
 let state = 'title';
 let score, lives, level, frame;
@@ -61,6 +62,38 @@ const DIFF = {
   normal: { lives: 3, playerSpeed: 5, shootCooldown: 10, enemySpeedMult: 1.0, shootRateMult: 1.0, spawnBase: 0.03, label: 'ふつう' },
   hard:   { lives: 2, playerSpeed: 5, shootCooldown: 13, enemySpeedMult: 1.5, shootRateMult: 1.8, spawnBase: 0.045, label: 'むずかしい' },
 };
+
+// 敵タイプテーブル: level以上で出現
+// attack: 攻撃パターン関数名
+const ENEMY_TYPES = {
+  // --- 既存 ---
+  basic:   { w:30, h:30, hp:1,  speed:1,   color:'#f44', score:10,  shootRate:0.008, minLevel:1,  attack:'aimed' },
+  fast:    { w:24, h:24, hp:1,  speed:2.5, color:'#f4f', score:20,  shootRate:0.012, minLevel:1,  attack:'aimed' },
+  tank:    { w:40, h:40, hp:4,  speed:0.5, color:'#f84', score:30,  shootRate:0.005, minLevel:2,  attack:'spread3' },
+  // --- 新規 ---
+  zigzag:  { w:28, h:28, hp:1,  speed:1.5, color:'#4ff', score:25,  shootRate:0.010, minLevel:2,  attack:'aimed' },   // ジグザグ移動
+  sniper:  { w:26, h:34, hp:2,  speed:0.8, color:'#fa0', score:35,  shootRate:0.006, minLevel:3,  attack:'sniper' },  // 静止して狙い撃ち
+  spread:  { w:32, h:32, hp:2,  speed:1.0, color:'#a4f', score:40,  shootRate:0.009, minLevel:3,  attack:'spread5' }, // 5way弾
+  bomber:  { w:44, h:44, hp:5,  speed:0.6, color:'#f60', score:60,  shootRate:0.004, minLevel:4,  attack:'burst' },   // 死亡時に弾バースト
+  laser:   { w:30, h:46, hp:3,  speed:0.7, color:'#0f8', score:50,  shootRate:0.003, minLevel:4,  attack:'laser' },   // レーザー照射
+  homing:  { w:28, h:28, hp:2,  speed:1.2, color:'#ff4', score:45,  shootRate:0.007, minLevel:5,  attack:'homing' },  // 追尾弾
+  boss:    { w:70, h:70, hp:30, speed:0.4, color:'#f08', score:300, shootRate:0.015, minLevel:6,  attack:'boss' },    // ボス
+};
+
+// レベルごとの出現重み
+function getSpawnTable() {
+  const table = [];
+  for (const [type, cfg] of Object.entries(ENEMY_TYPES)) {
+    if (type === 'boss') continue; // ボスは別扱い
+    if (level >= cfg.minLevel) table.push({ type, weight: getWeight(type) });
+  }
+  return table;
+}
+
+function getWeight(type) {
+  const w = { basic:5, fast:3, tank:2, zigzag:3, sniper:2, spread:2, bomber:1, laser:1, homing:2 };
+  return w[type] || 1;
+}
 
 document.addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -90,33 +123,151 @@ function startGame() {
   loop();
 }
 
-function spawnEnemy() {
-  const types = ['basic', 'tank', 'fast'];
-  let weights = [0.6, 0.2, 0.2];
-  if (level >= 3) weights = [0.4, 0.3, 0.3];
-  const r = Math.random();
-  let type = types[0];
-  if (r > weights[0] + weights[1]) type = types[2];
-  else if (r > weights[0]) type = types[1];
+// ---- 攻撃パターン ----
 
+function fireAimed(e) {
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+  shootEnemyBullet(e.x, e.y, dx/dist*3.5, dy/dist*3.5, '#f44');
+}
+
+function fireSpread(e, ways, color) {
+  const base = Math.atan2(player.y - e.y, player.x - e.x);
+  const gap = 0.25;
+  const half = (ways-1)/2;
+  for (let i = 0; i < ways; i++) {
+    const a = base + (i - half) * gap;
+    shootEnemyBullet(e.x, e.y, Math.cos(a)*3, Math.sin(a)*3, color || '#a4f');
+  }
+}
+
+function fireSniper(e) {
+  // チャージ → 高速弾
+  if (!e.chargeTimer) e.chargeTimer = 0;
+  e.chargeTimer++;
+  if (e.chargeTimer >= 60) {
+    e.chargeTimer = 0;
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+    shootEnemyBullet(e.x, e.y, dx/dist*9, dy/dist*9, '#fa0', 6);
+  }
+}
+
+function fireLaser(e) {
+  if (!e.laserTimer) e.laserTimer = 0;
+  e.laserTimer++;
+  const cycle = 120;
+  const t = e.laserTimer % cycle;
+  if (t === 40) {
+    // レーザー発射: 細かい弾を直線に複数
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+    for (let i = 0; i < 8; i++) {
+      shootEnemyBullet(e.x + dx/dist*i*18, e.y + dy/dist*i*18,
+        dx/dist*7, dy/dist*7, '#0f8', 3);
+    }
+  }
+}
+
+function fireHoming(e) {
+  const b = { x: e.x, y: e.y, vx: 0, vy: 2, color: '#ff4', size: 5, homing: true, life: 180 };
+  enemyBullets.push(b);
+}
+
+function fireBoss(e) {
+  if (!e.bossPhase) e.bossPhase = 0;
+  if (!e.bossTimer) e.bossTimer = 0;
+  e.bossTimer++;
+  const t = e.bossTimer;
+
+  // フェーズ切り替え
+  if (e.hp <= e.maxHp * 0.5) e.bossPhase = 1;
+  if (e.hp <= e.maxHp * 0.25) e.bossPhase = 2;
+
+  if (e.bossPhase === 0) {
+    // 3方向弾 周期的
+    if (t % 40 === 0) fireSpread(e, 3, '#f08');
+  } else if (e.bossPhase === 1) {
+    // 5方向 + 追尾
+    if (t % 35 === 0) fireSpread(e, 5, '#f08');
+    if (t % 80 === 0) fireHoming(e);
+  } else {
+    // 全方位弾幕
+    if (t % 20 === 0) {
+      for (let i = 0; i < 12; i++) {
+        const a = TAU/12*i + t*0.05;
+        shootEnemyBullet(e.x, e.y, Math.cos(a)*3.5, Math.sin(a)*3.5, '#f44');
+      }
+    }
+    if (t % 50 === 0) fireSpread(e, 3, '#fa0');
+  }
+}
+
+function shootEnemyBullet(x, y, vx, vy, color, size=4) {
+  enemyBullets.push({ x, y, vx, vy, color, size, homing: false, life: 300 });
+}
+
+// 死亡時バースト
+function onDeath(e) {
+  if (e.type === 'bomber') {
+    for (let i = 0; i < 12; i++) {
+      const a = TAU/12*i;
+      shootEnemyBullet(e.x, e.y, Math.cos(a)*3, Math.sin(a)*3, '#f60');
+    }
+  }
+  if (e.type === 'boss') {
+    for (let i = 0; i < 24; i++) {
+      const a = TAU/24*i;
+      shootEnemyBullet(e.x, e.y, Math.cos(a)*4, Math.sin(a)*4, '#f08', 6);
+    }
+  }
+}
+
+// ---- スポーン ----
+
+let bossSpawned = false;
+
+function spawnEnemy() {
+  // ボスはレベル6以上で一度だけ、スコア節目ごと
+  if (level >= 6 && !bossSpawned && score % 1000 < 5) {
+    bossSpawned = true;
+    spawnType('boss');
+    return;
+  }
+
+  const table = getSpawnTable();
+  if (!table.length) return;
+  const total = table.reduce((s, t) => s + t.weight, 0);
+  let r = Math.random() * total;
+  let chosen = table[0].type;
+  for (const t of table) { r -= t.weight; if (r <= 0) { chosen = t.type; break; } }
+  spawnType(chosen);
+}
+
+function spawnType(type) {
   const d = DIFF[difficulty];
-  const configs = {
-    basic: { w:30, h:30, hp:1, speed:1   * d.enemySpeedMult, color:'#f44', score:10, shootRate:0.008 * d.shootRateMult },
-    tank:  { w:40, h:40, hp:3, speed:0.5 * d.enemySpeedMult, color:'#f84', score:30, shootRate:0.005 * d.shootRateMult },
-    fast:  { w:24, h:24, hp:1, speed:2.5 * d.enemySpeedMult, color:'#f4f', score:20, shootRate:0.012 * d.shootRateMult },
+  const cfg = ENEMY_TYPES[type];
+  const sm = type === 'boss' ? 1 : d.enemySpeedMult;
+  const rm = type === 'boss' ? 1 : d.shootRateMult;
+  const e = {
+    x: Math.random()*(W - cfg.w*2) + cfg.w,
+    y: type === 'boss' ? -cfg.h : -cfg.h,
+    type, w: cfg.w, h: cfg.h,
+    hp: cfg.hp, maxHp: cfg.hp,
+    speed: cfg.speed * sm,
+    color: cfg.color,
+    score: cfg.score,
+    shootRate: cfg.shootRate * rm,
+    dx: (type === 'zigzag') ? 3 : (Math.random()-0.5)*2,
+    zigzagTimer: 0,
+    sniperStopped: false,
   };
-  const cfg = configs[type];
-  enemies.push({
-    x: Math.random()*(W - cfg.w) + cfg.w/2,
-    y: -cfg.h, type, ...cfg,
-    maxHp: cfg.hp,
-    dx: (Math.random()-0.5) * 1.5,
-  });
+  enemies.push(e);
 }
 
 function spawnParticles(x, y, color, count=8) {
   for (let i = 0; i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
+    const angle = Math.random() * TAU;
     const speed = Math.random() * 3 + 1;
     particles.push({
       x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
@@ -125,10 +276,11 @@ function spawnParticles(x, y, color, count=8) {
   }
 }
 
+// ---- Update ----
+
 function update() {
   frame++;
 
-  // stars
   for (const s of stars) { s.y += s.speed; if (s.y > H) s.y = 0; }
 
   // player move
@@ -148,36 +300,32 @@ function update() {
     if (bullets[i].y < 0) bullets.splice(i, 1);
   }
 
-  // spawn enemies
+  // spawn
   const base = DIFF[difficulty].spawnBase;
-  const spawnRate = Math.max(0.01, base - level*0.003);
-  if (Math.random() < spawnRate + level*0.002) spawnEnemy();
+  const spawnRate = Math.max(0.008, base - level*0.002);
+  if (Math.random() < spawnRate + level*0.001) spawnEnemy();
 
   // enemies
   for (let i = enemies.length-1; i >= 0; i--) {
     const e = enemies[i];
-    e.y += e.speed;
-    e.x += e.dx;
-    if (e.x < e.w/2 || e.x > W-e.w/2) e.dx *= -1;
 
-    // enemy shoot
-    if (Math.random() < e.shootRate) {
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
-      const dist = Math.sqrt(dx*dx+dy*dy);
-      enemyBullets.push({ x: e.x, y: e.y, vx: dx/dist*3, vy: dy/dist*3 });
-    }
+    // 移動
+    moveEnemy(e);
 
-    // enemy off screen
+    // 攻撃
+    doAttack(e);
+
+    // off screen
     if (e.y > H + e.h) {
       enemies.splice(i, 1);
       lives--;
       updateUI();
-      if (lives <= 0) gameOver();
+      if (lives <= 0) { gameOver(); return; }
       continue;
     }
 
-    // player bullet collision
+    // hit check
+    let killed = false;
     for (let j = bullets.length-1; j >= 0; j--) {
       const b = bullets[j];
       if (Math.abs(b.x - e.x) < e.w/2 && Math.abs(b.y - e.y) < e.h/2) {
@@ -185,21 +333,34 @@ function update() {
         e.hp--;
         spawnParticles(b.x, b.y, '#ff0', 4);
         if (e.hp <= 0) {
-          spawnParticles(e.x, e.y, e.color, 12);
+          spawnParticles(e.x, e.y, e.color, e.type==='boss'?30:12);
+          onDeath(e);
           score += e.score;
+          if (e.type === 'boss') bossSpawned = false;
           enemies.splice(i, 1);
           updateUI();
+          killed = true;
         }
         break;
       }
     }
+    if (killed) continue;
   }
 
   // enemy bullets
   for (let i = enemyBullets.length-1; i >= 0; i--) {
     const b = enemyBullets[i];
+    b.life--;
+    if (b.homing) {
+      const dx = player.x - b.x, dy = player.y - b.y;
+      const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+      b.vx += dx/dist * 0.15;
+      b.vy += dy/dist * 0.15;
+      const spd = Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+      if (spd > 4) { b.vx = b.vx/spd*4; b.vy = b.vy/spd*4; }
+    }
     b.x += b.vx; b.y += b.vy;
-    if (b.x < 0 || b.x > W || b.y < 0 || b.y > H) { enemyBullets.splice(i, 1); continue; }
+    if (b.life <= 0 || b.x < 0 || b.x > W || b.y < 0 || b.y > H) { enemyBullets.splice(i, 1); continue; }
     if (Math.abs(b.x - player.x) < player.w/2 && Math.abs(b.y - player.y) < player.h/2) {
       enemyBullets.splice(i, 1);
       spawnParticles(player.x, player.y, '#0ff', 10);
@@ -216,51 +377,122 @@ function update() {
     if (p.life <= 0) particles.splice(i, 1);
   }
 
-  // level up
   level = Math.floor(score / 200) + 1;
   levelDisplay.textContent = level;
 }
+
+function moveEnemy(e) {
+  switch (e.type) {
+    case 'zigzag':
+      e.zigzagTimer++;
+      if (e.zigzagTimer % 60 === 0) e.dx *= -1;
+      e.x += e.dx;
+      e.y += e.speed;
+      break;
+    case 'sniper':
+      // 画面上部で停止してから攻撃
+      if (e.y < 80) { e.y += e.speed; }
+      else { e.sniperStopped = true; }
+      break;
+    case 'boss': {
+      // 左右往復 + ゆっくり下降
+      e.x += e.dx;
+      if (e.x < e.w/2+10 || e.x > W-e.w/2-10) e.dx *= -1;
+      if (e.y < 100) e.y += e.speed;
+      break;
+    }
+    case 'laser':
+      e.y += e.speed * 0.5;
+      e.x += e.dx * 0.5;
+      if (e.x < e.w/2 || e.x > W-e.w/2) e.dx *= -1;
+      break;
+    default:
+      e.y += e.speed;
+      e.x += e.dx;
+      if (e.x < e.w/2 || e.x > W-e.w/2) e.dx *= -1;
+  }
+}
+
+function doAttack(e) {
+  const cfg = ENEMY_TYPES[e.type];
+  if (!cfg) return;
+  // shootRateベースの確率チェック (sniper/laser/bossは独自タイマー)
+  const roll = Math.random() < e.shootRate;
+
+  switch (cfg.attack) {
+    case 'aimed':   if (roll) fireAimed(e); break;
+    case 'spread3': if (roll) fireSpread(e, 3, '#f84'); break;
+    case 'spread5': if (roll) fireSpread(e, 5, '#a4f'); break;
+    case 'sniper':  if (e.sniperStopped) fireSniper(e); break;
+    case 'laser':   fireLaser(e); break;
+    case 'homing':  if (roll) fireHoming(e); break;
+    case 'burst':   if (roll) fireAimed(e); break; // bomberは通常弾 + 死亡バースト
+    case 'boss':    fireBoss(e); break;
+  }
+}
+
+// ---- Draw ----
 
 function draw() {
   ctx.fillStyle = '#050510';
   ctx.fillRect(0, 0, W, H);
 
-  // stars
   for (const s of stars) {
     ctx.fillStyle = `rgba(255,255,255,${s.size/3})`;
     ctx.fillRect(s.x, s.y, s.size, s.size);
   }
 
-  // player
   drawShip(player.x, player.y, player.w, player.h, '#0ff');
 
-  // bullets
   ctx.fillStyle = '#ff0';
-  for (const b of bullets) {
-    ctx.fillRect(b.x-2, b.y-8, 4, 12);
-  }
+  for (const b of bullets) ctx.fillRect(b.x-2, b.y-8, 4, 12);
 
-  // enemies
   for (const e of enemies) {
     drawEnemy(e);
-    // hp bar
     if (e.maxHp > 1) {
       ctx.fillStyle = '#333';
       ctx.fillRect(e.x - e.w/2, e.y - e.h/2 - 8, e.w, 4);
-      ctx.fillStyle = '#f00';
+      ctx.fillStyle = e.type === 'boss' ? '#f08' : '#f00';
       ctx.fillRect(e.x - e.w/2, e.y - e.h/2 - 8, e.w * (e.hp/e.maxHp), 4);
+    }
+    // スナイパーのチャージ表示
+    if (e.type === 'sniper' && e.chargeTimer > 0) {
+      const ratio = e.chargeTimer / 60;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,160,0,${ratio})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.w/2 + 6, 0, TAU * ratio);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // レーザーの照射線
+    if (e.type === 'laser' && e.laserTimer) {
+      const t = e.laserTimer % 120;
+      if (t >= 35 && t <= 50) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(0,255,128,${1-(t-35)/15})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(player.x, player.y);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 
-  // enemy bullets
-  ctx.fillStyle = '#f44';
   for (const b of enemyBullets) {
+    ctx.save();
+    ctx.fillStyle = b.color || '#f44';
+    ctx.shadowColor = b.color || '#f44';
+    ctx.shadowBlur = 6;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
+    ctx.arc(b.x, b.y, b.size || 4, 0, TAU);
     ctx.fill();
+    ctx.restore();
   }
 
-  // particles
   for (const p of particles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
@@ -290,19 +522,60 @@ function drawShip(x, y, w, h, color) {
 function drawEnemy(e) {
   ctx.save();
   ctx.translate(e.x, e.y);
-  ctx.rotate(Math.PI);
   ctx.fillStyle = e.color;
   ctx.shadowColor = e.color;
-  ctx.shadowBlur = 10;
-  const s = e.w;
-  ctx.beginPath();
-  ctx.moveTo(0, -s/2);
-  ctx.lineTo(s/2, s/2);
-  ctx.lineTo(s/4, s/4);
-  ctx.lineTo(-s/4, s/4);
-  ctx.lineTo(-s/2, s/2);
-  ctx.closePath();
-  ctx.fill();
+  ctx.shadowBlur = 12;
+
+  if (e.type === 'boss') {
+    // ボス: 六角形
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = TAU/6*i - Math.PI/2;
+      i === 0 ? ctx.moveTo(Math.cos(a)*e.w/2, Math.sin(a)*e.w/2)
+              : ctx.lineTo(Math.cos(a)*e.w/2, Math.sin(a)*e.w/2);
+    }
+    ctx.closePath();
+    ctx.fill();
+    // コア
+    ctx.fillStyle = '#fff';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.w/6, 0, TAU);
+    ctx.fill();
+  } else if (e.type === 'tank' || e.type === 'bomber') {
+    // 菱形
+    ctx.beginPath();
+    ctx.moveTo(0, -e.h/2);
+    ctx.lineTo(e.w/2, 0);
+    ctx.lineTo(0, e.h/2);
+    ctx.lineTo(-e.w/2, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else if (e.type === 'laser') {
+    // 十字形
+    ctx.fillRect(-e.w/2, -e.h/6, e.w, e.h/3);
+    ctx.fillRect(-e.w/6, -e.h/2, e.w/3, e.h);
+  } else if (e.type === 'sniper') {
+    // 細長い三角
+    ctx.beginPath();
+    ctx.moveTo(0, -e.h/2);
+    ctx.lineTo(e.w/3, e.h/2);
+    ctx.lineTo(-e.w/3, e.h/2);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // 通常の逆三角
+    ctx.rotate(Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(0, -e.h/2);
+    ctx.lineTo(e.w/2, e.h/2);
+    ctx.lineTo(e.w/4, e.h/4);
+    ctx.lineTo(-e.w/4, e.h/4);
+    ctx.lineTo(-e.w/2, e.h/2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
   ctx.shadowBlur = 0;
   ctx.restore();
 }
