@@ -323,22 +323,23 @@ let keys = {};
 let difficulty = 'easy';
 
 const DIFF = {
-  easy:   { lives:5, playerSpeed:6, shootCooldown:8,  enemySpeedMult:0.7, shootRateMult:0.5, spawnBase:0.02, label:'EASY' },
-  normal: { lives:3, playerSpeed:5, shootCooldown:10, enemySpeedMult:1.0, shootRateMult:1.0, spawnBase:0.03, label:'NORMAL' },
-  hard:   { lives:2, playerSpeed:5, shootCooldown:13, enemySpeedMult:1.5, shootRateMult:1.8, spawnBase:0.045, label:'HARD' },
+  easy:   { lives:6, playerSpeed:6, shootCooldown:7,  enemySpeedMult:0.55, shootRateMult:0.35, spawnBase:0.016, label:'EASY' },
+  normal: { lives:4, playerSpeed:5, shootCooldown:10, enemySpeedMult:0.80, shootRateMult:0.70, spawnBase:0.024, label:'NORMAL' },
+  hard:   { lives:3, playerSpeed:5, shootCooldown:12, enemySpeedMult:1.10, shootRateMult:1.20, spawnBase:0.034, label:'HARD' },
 };
 
 const ENEMY_TYPES = {
-  basic:  { w:28, h:28, hp:1,  speed:1,   color:'#ff5555', score:10,  shootRate:0.008, minLevel:1, attack:'aimed' },
-  fast:   { w:22, h:22, hp:1,  speed:2.5, color:'#ff55ff', score:20,  shootRate:0.012, minLevel:1, attack:'aimed' },
-  tank:   { w:38, h:38, hp:4,  speed:0.5, color:'#ff9944', score:30,  shootRate:0.005, minLevel:2, attack:'spread3' },
-  zigzag: { w:26, h:26, hp:1,  speed:1.5, color:'#55ffff', score:25,  shootRate:0.010, minLevel:2, attack:'aimed' },
-  sniper: { w:24, h:36, hp:2,  speed:0.8, color:'#ffbb00', score:35,  shootRate:0.006, minLevel:3, attack:'sniper' },
-  spread: { w:30, h:30, hp:2,  speed:1.0, color:'#bb55ff', score:40,  shootRate:0.009, minLevel:3, attack:'spread5' },
-  bomber: { w:42, h:42, hp:5,  speed:0.6, color:'#ff7700', score:60,  shootRate:0.004, minLevel:4, attack:'burst' },
-  laser:  { w:28, h:44, hp:3,  speed:0.7, color:'#00ffbb', score:50,  shootRate:0.003, minLevel:4, attack:'laser' },
-  homing: { w:26, h:26, hp:2,  speed:1.2, color:'#ffff55', score:45,  shootRate:0.007, minLevel:5, attack:'homing' },
-  boss:   { w:70, h:70, hp:30, speed:0.4, color:'#ff00aa', score:300, shootRate:0.015, minLevel:6, attack:'boss' },
+  basic:    { w:28, h:28, hp:1,  speed:0.8,  color:'#ff5555', score:10,  shootRate:0.006, minLevel:1,  attack:'aimed' },
+  fast:     { w:22, h:22, hp:1,  speed:2.0,  color:'#ff55ff', score:20,  shootRate:0.008, minLevel:1,  attack:'aimed' },
+  tank:     { w:38, h:38, hp:3,  speed:0.45, color:'#ff9944', score:30,  shootRate:0.004, minLevel:2,  attack:'spread3' },
+  zigzag:   { w:26, h:26, hp:1,  speed:1.2,  color:'#55ffff', score:25,  shootRate:0.007, minLevel:2,  attack:'aimed' },
+  sniper:   { w:24, h:36, hp:2,  speed:0.7,  color:'#ffbb00', score:35,  shootRate:0.005, minLevel:3,  attack:'sniper' },
+  spread:   { w:30, h:30, hp:2,  speed:0.8,  color:'#bb55ff', score:40,  shootRate:0.007, minLevel:3,  attack:'spread5' },
+  bomber:   { w:42, h:42, hp:4,  speed:0.5,  color:'#ff7700', score:60,  shootRate:0.003, minLevel:4,  attack:'burst' },
+  laser:    { w:28, h:44, hp:2,  speed:0.6,  color:'#00ffbb', score:50,  shootRate:0.002, minLevel:4,  attack:'laser' },
+  homing:   { w:26, h:26, hp:2,  speed:1.0,  color:'#ffff55', score:45,  shootRate:0.005, minLevel:5,  attack:'homing' },
+  miniboss: { w:52, h:52, hp:18, speed:0.5,  color:'#ff6622', score:150, shootRate:0.010, minLevel:5,  attack:'miniboss' },
+  boss:     { w:70, h:70, hp:40, speed:0.35, color:'#ff00aa', score:400, shootRate:0.012, minLevel:10, attack:'boss' },
 };
 
 document.addEventListener('keydown', e => { keys[e.code] = true; if (e.code==='Space') e.preventDefault(); });
@@ -359,8 +360,9 @@ const ITEM_DEFS = {
 
 // 敵ごとのドロップ率 (0-1、0=ドロップなし)
 const DROP_RATE = {
-  basic:0.10, fast:0.12, tank:0.25, zigzag:0.15,
-  sniper:0.20, spread:0.20, bomber:0.30, laser:0.25, homing:0.22, boss:1.0,
+  basic:0.12, fast:0.14, tank:0.28, zigzag:0.18,
+  sniper:0.22, spread:0.22, bomber:0.32, laser:0.28, homing:0.25,
+  miniboss:1.0, boss:1.0,
 };
 const DROP_TABLE = {
   basic:  [{t:'heal',w:3},{t:'rapid',w:2},{t:'speedup',w:1}],
@@ -372,7 +374,8 @@ const DROP_TABLE = {
   bomber: [{t:'bomb',w:3},{t:'power',w:2},{t:'lifeup',w:1},{t:'shield',w:1}],
   laser:  [{t:'power',w:3},{t:'spread',w:2},{t:'shield',w:1},{t:'barrier',w:2}],
   homing: [{t:'shield',w:3},{t:'heal',w:2},{t:'rapid',w:1},{t:'barrier',w:1}],
-  boss:   [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1},{t:'barrier',w:2}],
+  miniboss:[{t:'power',w:3},{t:'shield',w:2},{t:'barrier',w:2},{t:'heal',w:2},{t:'bomb',w:1},{t:'rapid',w:1}],
+  boss:    [{t:'lifeup',w:4},{t:'power',w:3},{t:'shield',w:2},{t:'bomb',w:2},{t:'spread',w:1},{t:'barrier',w:2}],
 };
 
 // ---- 難易度説明 ----
@@ -491,7 +494,7 @@ function startGame() {
   overlay.style.display = 'none';
   const d = DIFF[difficulty];
   score = 0; lives = d.lives; level = 1; frame = 0;
-  bossSpawned = false;
+  bossActive = false; waveEnemyCount = 0;
   powerups = {}; notifications = [];
   player = { x: W/2, y: H-70, w:36, h:36, speed:d.playerSpeed, shootCooldown:0, invincible:0 };
   bullets=[]; enemies=[]; enemyBullets=[]; particles=[]; trails=[]; items=[];
@@ -567,29 +570,67 @@ function fireBoss(e) {
   }
 }
 
-function onDeath(e) {
-  if (e.type==='bomber') for(let i=0;i<12;i++){const a=TAU/12*i; shootEnemyBullet(e.x,e.y,Math.cos(a)*3.2,Math.sin(a)*3.2,'#f70');}
-  if (e.type==='boss')   for(let i=0;i<24;i++){const a=TAU/24*i; shootEnemyBullet(e.x,e.y,Math.cos(a)*4,Math.sin(a)*4,e.color,7);}
-  shake(e.type==='boss'?18 : e.maxHp>2?8:4);
+function fireMiniboss(e) {
+  if (!e.mbTimer) e.mbTimer=0;
+  e.mbTimer++;
+  const t=e.mbTimer;
+  const phase=e.hp<=e.maxHp*0.5?1:0;
+  if (phase===0) {
+    if(t%50===0) fireSpread(e,3,e.color);
+    if(t%90===0) fireAimed(e,5);
+  } else {
+    if(t%35===0) fireSpread(e,5,e.color);
+    if(t%60===0) fireHoming(e);
+  }
 }
 
-// ---- スポーン ----
-let bossSpawned=false;
+function onDeath(e) {
+  if (e.type==='bomber')  for(let i=0;i<12;i++){const a=TAU/12*i; shootEnemyBullet(e.x,e.y,Math.cos(a)*2.8,Math.sin(a)*2.8,'#f70');}
+  if (e.type==='miniboss')for(let i=0;i<8;i++) {const a=TAU/8*i;  shootEnemyBullet(e.x,e.y,Math.cos(a)*3,  Math.sin(a)*3,  e.color,5);}
+  if (e.type==='boss')    for(let i=0;i<20;i++){const a=TAU/20*i; shootEnemyBullet(e.x,e.y,Math.cos(a)*3.5,Math.sin(a)*3.5,e.color,7);}
+  shake(e.type==='boss'?18:e.type==='miniboss'?12:e.maxHp>2?7:3);
+}
+
+// ---- スポーン & レベル管理 ----
+// bossActive: ボス/中ボス戦中フラグ（戦中は通常敵スポーン停止）
+let bossActive=false;
+let waveEnemyCount=0; // 現ウェーブで倒した通常敵数
+const WAVE_KILL_TO_LEVEL=8; // この数だけ倒すとレベルアップ
+
+function isBossLevel(lv) { return lv%10===0; }
+function isMinibossLevel(lv) { return lv%5===0 && !isBossLevel(lv); }
+
+function triggerWaveClear() {
+  // レベルアップ
+  level++;
+  waveEnemyCount=0;
+  levelDisplay.textContent=String(level).padStart(2,'0');
+  notifications.push({text:`LEVEL ${level}`, color:'#0ff', life:150, maxLife:150});
+
+  if (isBossLevel(level)) {
+    bossActive=true;
+    notifications.push({text:'★ BOSS BATTLE ★', color:'#ff00aa', life:200, maxLife:200});
+    setTimeout(()=>spawnType('boss'), 800);
+  } else if (isMinibossLevel(level)) {
+    bossActive=true;
+    notifications.push({text:'▲ MINI BOSS ▲', color:'#ff6622', life:180, maxLife:180});
+    setTimeout(()=>spawnType('miniboss'), 600);
+  }
+}
+
 function getSpawnTable() {
+  const skip=['boss','miniboss'];
+  const weights={basic:5,fast:3,tank:2,zigzag:3,sniper:2,spread:2,bomber:1,laser:1,homing:2};
   const table=[];
   for (const [type,cfg] of Object.entries(ENEMY_TYPES)) {
-    if (type==='boss') continue;
-    if (level>=cfg.minLevel) {
-      const w={basic:5,fast:3,tank:2,zigzag:3,sniper:2,spread:2,bomber:1,laser:1,homing:2}[type]||1;
-      table.push({type,weight:w});
-    }
+    if (skip.includes(type)) continue;
+    if (level>=cfg.minLevel) table.push({type,weight:weights[type]||1});
   }
   return table;
 }
+
 function spawnEnemy() {
-  if (level>=6 && !bossSpawned && enemies.filter(e=>e.type==='boss').length===0 && Math.random()<0.003) {
-    bossSpawned=true; spawnType('boss'); return;
-  }
+  if (bossActive) return; // ボス戦中は通常敵スポーン停止
   const table=getSpawnTable();
   if (!table.length) return;
   const total=table.reduce((s,t)=>s+t.weight,0);
@@ -597,17 +638,19 @@ function spawnEnemy() {
   for (const t of table){r-=t.weight; if(r<=0){chosen=t.type;break;}}
   spawnType(chosen);
 }
+
 function spawnType(type) {
   const d=DIFF[difficulty], cfg=ENEMY_TYPES[type];
-  const sm=type==='boss'?1:d.enemySpeedMult, rm=type==='boss'?1:d.shootRateMult;
+  const isBossType=(type==='boss'||type==='miniboss');
+  const sm=isBossType?1:d.enemySpeedMult;
+  const rm=isBossType?1:d.shootRateMult;
   enemies.push({
     x: Math.random()*(W-cfg.w*2)+cfg.w, y:-cfg.h,
     type, w:cfg.w, h:cfg.h, hp:cfg.hp, maxHp:cfg.hp,
     speed:cfg.speed*sm, color:cfg.color, score:cfg.score,
     shootRate:cfg.shootRate*rm,
     dx:(type==='zigzag')?3:(Math.random()-0.5)*2,
-    zigzagTimer:0, sniperStopped:false,
-    angle:0,
+    zigzagTimer:0, sniperStopped:false, angle:0,
   });
 }
 
@@ -694,10 +737,10 @@ function update() {
     if (b.y<0 || b.x<0 || b.x>W) bullets.splice(i,1);
   }
 
-  // spawn
+  // spawn (ボス戦中はspawnEnemy内でreturn)
   const base=DIFF[difficulty].spawnBase;
-  const spawnRate=Math.max(0.008, base-level*0.002);
-  if (Math.random()<spawnRate+level*0.001) spawnEnemy();
+  const spawnRate=Math.min(base + level*0.0015, base*2);
+  if (Math.random()<spawnRate) spawnEnemy();
 
   // enemies
   for (let i=enemies.length-1;i>=0;i--) {
@@ -732,9 +775,17 @@ function update() {
           spawnShockwave(e.x, e.y, e.color);
           onDeath(e);
           rollDrop(e.type, e.x, e.y);
-          e.type==='boss' ? sfxBossKill() : sfxKill();
+          e.type==='boss'||e.type==='miniboss' ? sfxBossKill() : sfxKill();
           score+=e.score;
-          if (e.type==='boss') bossSpawned=false;
+          if (e.type==='boss'||e.type==='miniboss') {
+            bossActive=false;
+            // ボス撃破後に3つアイテムをドロップ
+            for(let k=0;k<2;k++) setTimeout(()=>rollDrop(e.type,e.x+(Math.random()-0.5)*60,e.y+Math.random()*40),k*200);
+            notifications.push({text: e.type==='boss'?'BOSS DEFEATED!':'MINI BOSS DOWN!', color:e.color, life:200,maxLife:200});
+          } else {
+            waveEnemyCount++;
+            if (waveEnemyCount>=WAVE_KILL_TO_LEVEL) triggerWaveClear();
+          }
           enemies.splice(i,1);
           updateUI(); killed=true;
         } else { shake(2); }
@@ -827,7 +878,7 @@ function update() {
     }
   }
 
-  level=Math.floor(score/200)+1;
+  // levelはtriggerWaveClear()で更新
   levelDisplay.textContent=String(level).padStart(2,'0');
 }
 
@@ -835,6 +886,9 @@ function moveEnemy(e) {
   switch(e.type) {
     case 'zigzag': e.zigzagTimer++; if(e.zigzagTimer%60===0)e.dx*=-1; e.x+=e.dx; e.y+=e.speed; break;
     case 'sniper': if(e.y<80)e.y+=e.speed; else e.sniperStopped=true; break;
+    case 'miniboss':
+      e.x+=e.dx; if(e.x<e.w/2+10||e.x>W-e.w/2-10)e.dx*=-1;
+      if(e.y<80)e.y+=e.speed; e.angle+=0.02; break;
     case 'boss':
       e.x+=e.dx; if(e.x<e.w/2+10||e.x>W-e.w/2-10)e.dx*=-1;
       if(e.y<110)e.y+=e.speed; e.angle+=0.015; break;
@@ -852,8 +906,9 @@ function doAttack(e) {
     case 'sniper':  if(e.sniperStopped)fireSniper(e); break;
     case 'laser':   fireLaser(e); break;
     case 'homing':  if(roll)fireHoming(e); break;
-    case 'burst':   if(roll)fireAimed(e); break;
-    case 'boss':    fireBoss(e); break;
+    case 'burst':    if(roll)fireAimed(e); break;
+    case 'miniboss': fireMiniboss(e); break;
+    case 'boss':     fireBoss(e); break;
   }
 }
 
@@ -1190,7 +1245,22 @@ function drawEnemy(e) {
   g2.addColorStop(1,shadeColor(e.color,0.35));
   ctx.fillStyle=g2;
 
-  if (e.type==='boss') {
+  if (e.type==='miniboss') {
+    // 中ボス: 二重菱形 + 回転リング
+    ctx.rotate(e.angle||0);
+    ctx.beginPath();
+    ctx.moveTo(0,-e.h/2); ctx.lineTo(e.w/2,0); ctx.lineTo(0,e.h/2); ctx.lineTo(-e.w/2,0);
+    ctx.closePath(); ctx.fill();
+    ctx.rotate(Math.PI/4);
+    ctx.globalAlpha=0.5;
+    ctx.beginPath();
+    ctx.moveTo(0,-e.h/2*0.7); ctx.lineTo(e.w/2*0.7,0); ctx.lineTo(0,e.h/2*0.7); ctx.lineTo(-e.w/2*0.7,0);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.shadowBlur=20;
+    ctx.beginPath(); ctx.arc(0,0,e.w/8,0,TAU); ctx.fill();
+  } else if (e.type==='boss') {
     ctx.rotate(e.angle||0);
     for (let i=0;i<6;i++) {
       const a=TAU/6*i;
