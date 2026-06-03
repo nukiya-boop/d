@@ -26,7 +26,7 @@
   <canvas id="c" width="600" height="700"></canvas>
   <div id="overlay">
     <h1>SHOOTER</h1>
-    <p>← → で移動 / スペースで射撃</p>
+    <p>← → ↑ ↓ で移動 / スペースで射撃</p>
     <button id="startBtn">スタート</button>
   </div>
 </div>
@@ -108,6 +108,8 @@ function update() {
   // player move
   if (keys['ArrowLeft'])  player.x = Math.max(player.w/2, player.x - player.speed);
   if (keys['ArrowRight']) player.x = Math.min(W - player.w/2, player.x + player.speed);
+  if (keys['ArrowUp'])    player.y = Math.max(player.h/2, player.y - player.speed);
+  if (keys['ArrowDown'])  player.y = Math.min(H - player.h/2, player.y + player.speed);
   if (player.shootCooldown > 0) player.shootCooldown--;
   if (keys['Space'] && player.shootCooldown <= 0) {
     bullets.push({ x: player.x, y: player.y - player.h/2, speed: 12 });
