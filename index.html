@@ -2,13 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>STELLAR FORCE</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Courier New', monospace; color: #fff; overflow: hidden; }
+  body { background: #000; margin: 0; padding: 0; height: 100vh; width: 100vw; font-family: 'Courier New', monospace; color: #fff; overflow: hidden; touch-action: none; }
+  #game-wrap { position: absolute; }
   canvas { display: block; image-rendering: crisp-edges; }
   #ui {
-    width: 600px; display: flex; justify-content: space-between; align-items: center;
+    width: 600px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
     padding: 6px 12px; font-size: 15px; letter-spacing: 2px;
     background: linear-gradient(90deg, rgba(0,255,255,0.08), rgba(0,255,255,0.03), rgba(0,255,255,0.08));
     border-bottom: 1px solid rgba(0,255,255,0.2);
@@ -80,9 +83,60 @@
 
   /* スコア表示 (ゲームオーバー) */
   #overlay .ov-score { font-size: 30px; color: #ff0; text-shadow: 0 0 20px #ff0; letter-spacing: 4px; margin: 6px 0; }
+
+  /* ===== スマホ対応 ===== */
+  #game-wrap {
+    position: relative;
+    /* JS で transform: scale() を適用 */
+    transform-origin: top left;
+  }
+  /* 仮想コントローラー */
+  #touch-controls {
+    display: none;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 180px; pointer-events: none;
+  }
+  #stick-zone {
+    position: absolute; left: 16px; bottom: 16px;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: rgba(0,200,255,0.07);
+    border: 2px solid rgba(0,200,255,0.25);
+    pointer-events: auto; touch-action: none;
+  }
+  #stick-knob {
+    position: absolute; width: 50px; height: 50px;
+    border-radius: 50%; top: 40px; left: 40px;
+    background: radial-gradient(circle at 35% 35%, rgba(0,230,255,0.7), rgba(0,100,180,0.5));
+    border: 2px solid rgba(0,220,255,0.6);
+    box-shadow: 0 0 14px rgba(0,200,255,0.4);
+    pointer-events: none;
+  }
+  #fire-btn {
+    position: absolute; right: 20px; bottom: 20px;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,220,0,0.5), rgba(200,80,0,0.4));
+    border: 2px solid rgba(255,200,0,0.6);
+    box-shadow: 0 0 20px rgba(255,160,0,0.4);
+    pointer-events: auto; touch-action: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: rgba(255,230,100,0.9);
+    text-shadow: 0 0 10px #ff0;
+    font-family: monospace; font-weight: bold;
+    user-select: none;
+  }
+  #fire-btn.pressing {
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,100,0.8), rgba(255,120,0,0.7));
+    box-shadow: 0 0 36px rgba(255,200,0,0.8);
+  }
+  /* スマホ時は touch-controls を表示 */
+  @media (pointer: coarse) {
+    #touch-controls { display: block; }
+  }
 </style>
 </head>
 <body>
+<div id="game-wrap">
 <div id="ui">
   <span>SCORE <span id="scoreDisplay">000000</span></span>
   <span id="livesDisplay">❤ ❤ ❤</span>
@@ -90,6 +144,10 @@
 </div>
 <div style="position:relative">
   <canvas id="c" width="600" height="700"></canvas>
+  <div id="touch-controls">
+    <div id="stick-zone"><div id="stick-knob"></div></div>
+    <div id="fire-btn">FIRE</div>
+  </div>
   <div id="overlay">
     <div class="ov-sub">— STELLAR FORCE —</div>
     <div class="ov-title">SHOOTER</div>
@@ -100,6 +158,8 @@
       <div class="ov-controls">
         <div class="ov-ctrl"><span class="ov-key">← → ↑ ↓</span>移動</div>
         <div class="ov-ctrl"><span class="ov-key">SPACE</span>ショット</div>
+        <div class="ov-ctrl" id="ctrl-touch" style="display:none"><span class="ov-key">左スティック</span>移動</div>
+        <div class="ov-ctrl" id="ctrl-touch2" style="display:none"><span class="ov-key">FIREボタン</span>ショット</div>
       </div>
     </div>
 
@@ -127,6 +187,7 @@
     </div>
   </div>
 </div>
+</div><!-- #game-wrap -->
 
 <script>
 const canvas = document.getElementById('c');
@@ -138,6 +199,94 @@ const levelDisplay = document.getElementById('levelDisplay');
 
 const W = canvas.width, H = canvas.height;
 const TAU = Math.PI * 2;
+
+// ===================== RESPONSIVE SCALING =====================
+const gameWrap = document.getElementById('game-wrap');
+const GAME_W = 600, GAME_H = 740; // UI(40) + canvas(700)
+
+function applyScale() {
+  const sw = window.innerWidth  / GAME_W;
+  const sh = window.innerHeight / GAME_H;
+  const scale = Math.min(sw, sh, 1); // PCは等倍以上にはしない
+  gameWrap.style.transform = `scale(${scale})`;
+  gameWrap.style.width  = GAME_W + 'px';
+  gameWrap.style.height = GAME_H + 'px';
+  // 中央揃え
+  const ox = (window.innerWidth  - GAME_W * scale) / 2;
+  const oy = (window.innerHeight - GAME_H * scale) / 2;
+  gameWrap.style.marginLeft = ox + 'px';
+  gameWrap.style.marginTop  = oy + 'px';
+  // スマホ判定でタッチUIを表示
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+  document.getElementById('touch-controls').style.display = isTouch ? 'block' : 'none';
+  if (isTouch) {
+    document.getElementById('ctrl-touch').style.display  = 'flex';
+    document.getElementById('ctrl-touch2').style.display = 'flex';
+  }
+}
+window.addEventListener('resize', applyScale);
+applyScale();
+
+// ===================== TOUCH CONTROLS =====================
+const stickZone = document.getElementById('stick-zone');
+const stickKnob = document.getElementById('stick-knob');
+const fireBtn   = document.getElementById('fire-btn');
+
+const STICK_R   = 65;  // stickZone の半径
+const KNOB_HALF = 25;  // knob の半径
+let stickVec = { x: 0, y: 0 }; // -1〜1
+let touchFire = false;
+let stickTouchId = null, fireTouchId = null;
+
+function getStickCenter() {
+  const r = stickZone.getBoundingClientRect();
+  return { x: r.left + r.width/2, y: r.top + r.height/2 };
+}
+
+stickZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  stickTouchId = t.identifier;
+  updateStick(t);
+}, { passive: false });
+
+stickZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === stickTouchId) updateStick(t);
+  }
+}, { passive: false });
+
+stickZone.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === stickTouchId) { stickVec = {x:0,y:0}; resetKnob(); stickTouchId=null; }
+  }
+}, { passive: false });
+
+function updateStick(touch) {
+  const c = getStickCenter();
+  let dx = touch.clientX - c.x;
+  let dy = touch.clientY - c.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  const clamped = Math.min(dist, STICK_R);
+  const nx = dx / (dist||1);
+  const ny = dy / (dist||1);
+  stickVec = { x: nx * (clamped/STICK_R), y: ny * (clamped/STICK_R) };
+  stickKnob.style.left = (STICK_R - KNOB_HALF + nx*clamped) + 'px';
+  stickKnob.style.top  = (STICK_R - KNOB_HALF + ny*clamped) + 'px';
+}
+function resetKnob() {
+  stickKnob.style.left = (STICK_R - KNOB_HALF) + 'px';
+  stickKnob.style.top  = (STICK_R - KNOB_HALF) + 'px';
+}
+
+fireBtn.addEventListener('touchstart', e => { e.preventDefault(); touchFire=true; fireTouchId=e.changedTouches[0].identifier; fireBtn.classList.add('pressing'); resumeAC(); }, { passive:false });
+fireBtn.addEventListener('touchend',   e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier===fireTouchId) { touchFire=false; fireBtn.classList.remove('pressing'); }
+}, { passive:false });
+// ===================== END TOUCH =====================
 
 // ===================== AUDIO ENGINE =====================
 const AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -686,10 +835,15 @@ function update() {
 
   // player move (effSpeed は shoot ブロックより前に計算されるため後で定義、暫定で先に計算)
   const _effSpeed = DIFF[difficulty].playerSpeed * (powerups.speedup ? 1.5 : 1);
-  if (keys['ArrowLeft'])  player.x=Math.max(player.w/2, player.x-_effSpeed);
-  if (keys['ArrowRight']) player.x=Math.min(W-player.w/2, player.x+_effSpeed);
-  if (keys['ArrowUp'])    player.y=Math.max(player.h/2, player.y-_effSpeed);
-  if (keys['ArrowDown'])  player.y=Math.min(H-player.h/2, player.y+_effSpeed);
+  // キーボード + タッチスティック
+  const moveL = keys['ArrowLeft']  || stickVec.x < -0.2;
+  const moveR = keys['ArrowRight'] || stickVec.x >  0.2;
+  const moveU = keys['ArrowUp']    || stickVec.y < -0.2;
+  const moveD = keys['ArrowDown']  || stickVec.y >  0.2;
+  if (moveL) player.x=Math.max(player.w/2,     player.x - _effSpeed * (stickVec.x < -0.2 ? Math.abs(stickVec.x) : 1));
+  if (moveR) player.x=Math.min(W-player.w/2,   player.x + _effSpeed * (stickVec.x >  0.2 ? stickVec.x          : 1));
+  if (moveU) player.y=Math.max(player.h/2,     player.y - _effSpeed * (stickVec.y < -0.2 ? Math.abs(stickVec.y) : 1));
+  if (moveD) player.y=Math.min(H-player.h/2,   player.y + _effSpeed * (stickVec.y >  0.2 ? stickVec.y          : 1));
   if (player.invincible>0) player.invincible--;
 
   // エンジントレイル
@@ -714,7 +868,7 @@ function update() {
 
   // shoot
   if (player.shootCooldown>0) player.shootCooldown--;
-  if (keys['Space'] && player.shootCooldown<=0) {
+  if ((keys['Space'] || touchFire) && player.shootCooldown<=0) {
     const bspd = powerups.power ? 16 : 13;
     if (powerups.spread) {
       // スプレッドショット: 3方向
